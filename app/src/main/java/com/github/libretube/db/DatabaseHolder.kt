@@ -1,6 +1,7 @@
 package com.github.libretube.db
 
 import androidx.room.DeleteColumn
+import androidx.room.DeleteTable
 import androidx.room.Room
 import androidx.room.migration.AutoMigrationSpec
 import androidx.room.migration.Migration
@@ -87,6 +88,9 @@ object DatabaseHolder {
 
     @DeleteColumn(tableName = "downloadItem", columnName = "url")
     class MIGRATION_23_24 : AutoMigrationSpec
+
+    @DeleteTable(tableName = "downloadSponsorBlockSegment")
+    class MIGRATION_25_26 : AutoMigrationSpec
 
     val Database by lazy {
         Room.databaseBuilder(LibreTubeApp.instance, AppDatabase::class.java, DATABASE_NAME)

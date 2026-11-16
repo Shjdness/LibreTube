@@ -15,6 +15,11 @@ import androidx.core.view.setPadding
 import androidx.core.view.updatePadding
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.GridLayoutManager
@@ -25,9 +30,14 @@ import com.github.libretube.api.PlaylistsHelper
 import com.github.libretube.api.obj.Playlist
 import com.github.libretube.api.obj.StreamItem
 import com.github.libretube.constants.IntentData
+import com.github.libretube.db.DatabaseHolder.Database
+import com.github.libretube.db.obj.DownloadPlaylistVideosCrossRef
+import com.github.libretube.helpers.NetworkHelper
 import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.databinding.FragmentPlaylistBinding
 import com.github.libretube.enums.PlaylistType
+import com.github.libretube.enums.SyncServerType
+import com.github.libretube.repo.LocalUserDataRepository
 import com.github.libretube.enums.menuoption.PlayListSortModeBottomSheetItem
 import com.github.libretube.extensions.TAG
 import com.github.libretube.extensions.ceilHalf
@@ -36,6 +46,7 @@ import com.github.libretube.extensions.setOnDismissListener
 import com.github.libretube.extensions.toID
 import com.github.libretube.extensions.toastFromMainDispatcher
 import com.github.libretube.helpers.ImageHelper
+import com.github.libretube.helpers.DownloadHelper
 import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.helpers.PreferenceHelper
 import com.github.libretube.parcelable.PlayerData
@@ -53,6 +64,7 @@ import com.github.libretube.util.PlayingQueue
 import com.github.libretube.util.TextUtils
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Dispatchers
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -138,12 +150,32 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
 
     private fun fetchPlaylist() {
         lifecycleScope.launch {
-            val response = try {
-                withContext(Dispatchers.IO) {
-                    PlaylistsHelper.getPlaylist(playlistId, playlistType)
+            val online = NetworkHelper.isNetworkAvailable(requireContext())
+            val localPlaylist = playlistType == PlaylistType.PRIVATE &&
+                UserDataRepositoryHelper.syncServerType == SyncServerType.NONE
+            val response = withContext(Dispatchers.IO) {
+                if (online || localPlaylist) {
+                    val playlist = try {
+                        PlaylistsHelper.getPlaylist(playlistId, playlistType)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG(), "Could not load playlist $playlistId", e)
+                        null
+                    }
+                    if (playlist != null) {
+                        if (!localPlaylist) PlaylistsHelper.cachePlaylistForOffline(playlistId, playlist,
+                            replaceLinks = playlist.nextpage == null)
+                        return@withContext playlist
+                    }
                 }
-            } catch (e: Exception) {
-                Log.e(TAG(), e.toString())
+                PlaylistsHelper.getCachedPlaylist(playlistId) ?: if (playlistType == PlaylistType.PRIVATE) {
+                    runCatching { LocalUserDataRepository().getPlaylist(playlistId) }.getOrNull()
+                } else null
+            }
+            if (response == null) {
+                _binding?.playlistProgress?.isGone = true
+                _binding?.nothingHere?.isVisible = true
                 return@launch
             }
             val binding = _binding ?: return@launch
@@ -173,6 +205,15 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
                 startVideoItemPlayback(streamItem)
             }
             binding.playlistRecView.adapter = playlistAdapter
+            viewLifecycleOwner.lifecycleScope.launch {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    Database.downloadDao().observeDownloads()
+                        .map { items -> items.filter { it.finishedAudio != null }.mapTo(mutableSetOf()) { it.download.videoId } }
+                        .distinctUntilChanged()
+                        .flowOn(Dispatchers.IO)
+                        .collect { playlistAdapter?.setDownloadedAudioIds(it) }
+                }
+            }
 
             // listen for playlist items to become deleted
             playlistAdapter!!.registerAdapterDataObserver(object :
@@ -200,7 +241,7 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
             }
 
             // listener for swiping to the left or right
-            if (playlistType != PlaylistType.PUBLIC) {
+            if (playlistType != PlaylistType.PUBLIC && (online || localPlaylist)) {
                 binding.playlistRecView.setOnDismissListener { position ->
                     removeFromPlaylist(position)
                 }
@@ -258,11 +299,14 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
                 binding.playAll.isGone = true
             } else {
                 binding.playAll.setOnClickListener {
-                    startVideoItemPlayback(getSortedVideos().first().item)
+                    val queue = getSortedVideos().map { it.item }
+                    val first = queue.firstOrNull() ?: return@setOnClickListener
+                    navigateVideo(first, queue, preferAvailable = true)
                 }
             }
 
             if (playlistType == PlaylistType.PUBLIC) {
+                binding.bookmark.isEnabled = online || UserDataRepositoryHelper.syncServerType == SyncServerType.NONE
                 binding.bookmark.setOnClickListener {
                     isBookmarked = !isBookmarked
                     updateBookmarkRes()
@@ -286,9 +330,8 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
                     binding.bookmark.text = getString(R.string.shuffle)
                     binding.bookmark.setOnClickListener {
                         val queue = playlistFeed.shuffled()
-                        PlayingQueue.setStreams(queue)
-
-                        navigateVideo(queue.firstOrNull() ?: return@setOnClickListener)
+                        val first = queue.firstOrNull() ?: return@setOnClickListener
+                        navigateVideo(first, queue, preferAvailable = true)
                     }
                 }
 
@@ -312,28 +355,31 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
                     sortOptions[selectedSortOrder].title.getText(requireContext())
             }
 
-            updatePlaylistBookmark(response)
+            if (online) updatePlaylistBookmark(response)
         }
     }
 
-    private fun navigateVideo(streamItem: StreamItem) {
-        NavigationHelper.navigateVideo(
-            requireContext(),
-            playerData = PlayerData(
-                streamItem.url!!.toID(),
-                playlistId = playlistId,
-                keepQueue = true
-            )
-        )
+    private fun navigateVideo(streamItem: StreamItem, queue: List<StreamItem>, preferAvailable: Boolean = false) {
+        val videoId = streamItem.url?.toID() ?: return
+        val context = requireContext()
+        viewLifecycleOwner.lifecycleScope.launch {
+            val localQueue = DownloadHelper.getDownloadedAudioQueue(queue.mapNotNull { it.url?.toID() })
+            val offline = !NetworkHelper.isNetworkAvailable(context)
+            val localId = videoId.takeIf { id -> localQueue.any { it.download.videoId == id } }
+                ?: localQueue.firstOrNull()?.download?.videoId?.takeIf { offline && preferAvailable }
+            when {
+                localId != null -> NavigationHelper.navigateDownloadedAudio(context, localId, localQueue)
+                offline -> context.toastFromMainDispatcher(R.string.audio_not_downloaded)
+                else -> {
+                    PlayingQueue.setStreams(queue)
+                    NavigationHelper.navigateVideo(context, PlayerData(videoId, playlistId = playlistId, keepQueue = true))
+                }
+            }
+        }
     }
 
     private fun startVideoItemPlayback(streamItem: StreamItem) {
-        if (playlistFeed.isEmpty()) return
-
-        val sortedStreams = getSortedVideos()
-        PlayingQueue.setStreams(sortedStreams.map { it.item })
-
-        navigateVideo(streamItem)
+        navigateVideo(streamItem, getSortedVideos().map { it.item })
     }
 
     /**
@@ -527,6 +573,12 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
             }
 
             nextPage = response.nextpage
+            withContext(Dispatchers.IO) {
+                Database.downloadDao().insertPlaylistVideoConnections(response.relatedStreams.mapNotNull { stream ->
+                    stream.url?.toID()?.let { DownloadPlaylistVideosCrossRef(playlistId = playlistId, videoId = it) }
+                })
+            }
+            playlistFeed.addAll(response.relatedStreams)
             val currentList = playlistAdapter?.currentList.orEmpty()
             val newList = currentList + response.relatedStreams.mapIndexed { index, item ->
                 PlaylistItem(item, currentList.size + index)

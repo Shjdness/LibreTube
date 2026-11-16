@@ -18,7 +18,6 @@ import com.github.libretube.constants.IntentData
 import com.github.libretube.db.DatabaseHelper
 import com.github.libretube.db.DatabaseHolder.Database
 import com.github.libretube.db.obj.DownloadWithItems
-import com.github.libretube.db.obj.filterByTab
 import com.github.libretube.enums.FileType
 import com.github.libretube.extensions.parcelable
 import com.github.libretube.extensions.setMetadata
@@ -28,16 +27,11 @@ import com.github.libretube.helpers.PlayerHelper
 import com.github.libretube.parcelable.PlayerData
 import com.github.libretube.repo.UserDataRepositoryHelper
 import com.github.libretube.ui.activities.MainActivity
-import com.github.libretube.ui.activities.NoInternetActivity
-import com.github.libretube.ui.fragments.DownloadTab
-import com.github.libretube.ui.fragments.DownloadsFragmentPage.Companion.sortDownloadList
 import com.github.libretube.util.PlayingQueue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import kotlin.io.path.exists
 
 /**
  * A service to play downloaded audio in the background
@@ -45,10 +39,8 @@ import kotlin.io.path.exists
 @OptIn(UnstableApi::class)
 open class OfflinePlayerService : AbstractPlayerService() {
     override val isOfflinePlayer: Boolean = true
-    private var noInternetService: Boolean = false
 
     private var downloadWithItems: DownloadWithItems? = null
-    private lateinit var playerData: PlayerData
 
     private val scope = CoroutineScope(Dispatchers.Main)
 
@@ -75,37 +67,27 @@ open class OfflinePlayerService : AbstractPlayerService() {
     override suspend fun onServiceCreated(args: Bundle) {
         if (args.isEmpty) return
 
-        playerData = args.parcelable(IntentData.playerData)!!
-        noInternetService = args.getBoolean(IntentData.noInternet, false)
+        val playerData = args.parcelable<PlayerData>(IntentData.playerData) ?: return
         isAudioOnlyPlayer = args.getBoolean(IntentData.audioOnly, false)
 
         PlayingQueue.clear()
 
-        this.videoId = if (playerData.shuffle) {
-            runBlocking(Dispatchers.IO) {
-                if (playerData.downloadTab == DownloadTab.PLAYLIST) {
-                    Database.downloadDao()
-                        .getDownloadPlaylistById(playerData.playlistId!!).downloadVideos.randomOrNull()
-                } else {
-                    Database.downloadDao().getAll().filterByTab(playerData.downloadTab!!)
-                        .randomOrNull()?.download
-                }
-            }?.videoId
-        } else {
-            playerData.videoId
-        } ?: return
+        this.videoId = playerData.videoId ?: return
+        val downloads = Database.downloadDao().getAll().associateBy { it.download.videoId }
+        PlayingQueue.setStreams(playerData.offlineQueueIds.mapNotNull { id ->
+            downloads[id]?.takeIf { it.finishedAudio != null }?.download?.toStreamItem()
+        })
 
-        exoPlayer?.addListener(playerListener)
-        trackSelector?.updateParameters {
-            setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, isAudioOnlyPlayer)
+        withContext(Dispatchers.Main) {
+            exoPlayer?.removeListener(playerListener)
+            exoPlayer?.addListener(playerListener)
+            trackSelector?.updateParameters {
+                setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, isAudioOnlyPlayer)
+            }
         }
-
-        fillQueue()
     }
 
-    override fun getIntentActivity(): Class<*> {
-        return if (noInternetService) NoInternetActivity::class.java else MainActivity::class.java
-    }
+    override fun getIntentActivity(): Class<*> = MainActivity::class.java
 
     /**
      * Attempt to start an audio player with the given download items
@@ -115,17 +97,16 @@ open class OfflinePlayerService : AbstractPlayerService() {
 
         val downloadWithItems = withContext(Dispatchers.IO) {
             Database.downloadDao().findById(videoId)
-        } ?: return
+        } ?: run {
+            withContext(Dispatchers.Main) { stopSelf() }
+            return
+        }
         this.downloadWithItems = downloadWithItems
 
         PlayingQueue.updateCurrent(downloadWithItems.download.toStreamItem())
 
         withContext(Dispatchers.Main) {
-            setSponsorBlockSegments(
-                downloadWithItems.downloadSponsorBlockSegments.map { it.toSegment() }
-            )
-
-            setMediaItem(downloadWithItems)
+            if (!setMediaItem(downloadWithItems)) return@withContext
 
             // automatically start playback when using the audio player
             exoPlayer?.playWhenReady = PlayerHelper.playAutomatically || isAudioOnlyPlayer
@@ -143,8 +124,8 @@ open class OfflinePlayerService : AbstractPlayerService() {
         }
     }
 
-    private fun setMediaItem(downloadWithItems: DownloadWithItems) {
-        val downloadFiles = downloadWithItems.downloadItems.filter { it.path.exists() }
+    private fun setMediaItem(downloadWithItems: DownloadWithItems): Boolean {
+        val downloadFiles = downloadWithItems.downloadItems.filter { it.isFinished && (!isAudioOnlyPlayer || it.type == FileType.AUDIO) }
 
         val videoUri = downloadFiles.firstOrNull { it.type == FileType.VIDEO }?.path?.toAndroidUri()
         val audioUri = downloadFiles.firstOrNull { it.type == FileType.AUDIO }?.path?.toAndroidUri()
@@ -188,7 +169,7 @@ open class OfflinePlayerService : AbstractPlayerService() {
 
         if (mediaSource == null || isAudioOnlyPlayer && audioSource == null) {
             stopSelf()
-            return
+            return false
         }
 
         exoPlayer?.setMediaSource(mediaSource!!)
@@ -197,32 +178,7 @@ open class OfflinePlayerService : AbstractPlayerService() {
             setPreferredTextRoleFlags(C.ROLE_FLAG_CAPTION)
             setPreferredTextLanguage(subtitleInfo?.language ?: "en")
         }
-    }
-
-    private suspend fun fillQueue() {
-        if (playerData.downloadTab == DownloadTab.PLAYLIST) {
-            var videos = withContext(Dispatchers.IO) {
-                Database.downloadDao().getDownloadPlaylistById(playerData.playlistId!!)
-            }.downloadVideos
-
-            if (playerData.shuffle) videos = listOf(videos.first { it.videoId == videoId }) +
-                    videos.filter { it.videoId != videoId }.shuffled()
-            else if (playerData.downloadSortingOrder != null) videos =
-                sortDownloadList(videos, playerData.downloadSortingOrder!!)
-            PlayingQueue.setStreams(videos.map { it.toStreamItem() })
-        } else {
-            var downloads = withContext(Dispatchers.IO) {
-                Database.downloadDao().getAll()
-            }
-                .filterByTab(playerData.downloadTab!!)
-                .map { it.download }
-
-            if (playerData.shuffle) downloads = downloads.shuffled()
-            else if (playerData.downloadSortingOrder != null) downloads =
-                sortDownloadList(downloads, playerData.downloadSortingOrder!!)
-
-            PlayingQueue.add(*downloads.map { it.toStreamItem() }.toTypedArray())
-        }
+        return true
     }
 
     /**

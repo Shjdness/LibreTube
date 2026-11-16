@@ -29,7 +29,6 @@ object PreferenceKeys {
     const val PLAYLISTS_ORDER = "playlists_order"
     const val PLAYLIST_SORT_ORDER = "playlist_sort_order"
     const val HOME_TAB_CONTENT = "home_tab_content"
-    const val SEARCH_SUGGESTIONS = "search_suggestions"
 
     // Instance
     const val SYNC_SERVER_TYPE = "sync_server"
@@ -42,7 +41,6 @@ object PreferenceKeys {
     // Player behavior
     const val AUTO_FULLSCREEN = "auto_fullscreen"
     const val AUTOPLAY = "autoplay"
-    const val RELATED_STREAMS = "related_streams_toggle"
     const val PLAYBACK_SPEED = "playback_speed"
     const val FULLSCREEN_ORIENTATION = "fullscreen_orientation"
     const val PAUSE_ON_SCREEN_OFF = "pause_screen_off"
@@ -74,12 +72,10 @@ object PreferenceKeys {
     const val SHOW_TIME_LEFT = "show_time_left"
     const val REPEAT_MODE = "repeat_mode"
 
-    // SponsorBlock
-    const val SB_USER_ID = "sb_user_id"
-    const val CONTRIBUTE_TO_SB = "sb_contribute_key"
+    // DeArrow
+    const val DEARROW_USER_ID = "sb_user_id"
     const val CONTRIBUTE_TO_DEARROW = "dearrow_contribute_key"
     const val DEARROW = "dearrow"
-    const val SB_HIGHLIGHTS = "sb_highlights"
 
     // Notifications
     const val NOTIFICATION_ENABLED = "notification_toggle"
@@ -99,11 +95,9 @@ object PreferenceKeys {
     const val LAST_LOCAL_FEED_REFRESH_TIMESTAMP_MILLIS = "last_feed_refresh_timestamp_millis"
 
     // Advanced
-    const val AUTOMATIC_UPDATE_CHECKS = "automatic_update_checks"
     const val DATA_SAVER_MODE = "data_saver_mode_key"
     const val RESET_SETTINGS = "reset_settings"
     const val SHARE_WITH_TIME_CODE = "share_with_time_code"
-    const val EXTERNAL_DOWNLOAD_PROVIDER = "external_download_provider"
     const val LOCAL_RYD = "local_return_youtube_dislikes"
     const val INCLUDE_TIMESTAMP_IN_BACKUP_FILENAME = "include_timestamp_in_filename"
 

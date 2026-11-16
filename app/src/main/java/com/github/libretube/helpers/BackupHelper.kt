@@ -99,7 +99,7 @@ object BackupHelper {
                     is Float -> putFloat(key, value)
                     is Long -> putLong(key, value)
                     is Int -> {
-                        // we only use integers for SponsorBlock colors and the start fragment
+                        // integer preferences such as the start fragment
                         if (key == PreferenceKeys.START_FRAGMENT || "_color" in key.orEmpty()) {
                             putInt(key, value)
                         } else {

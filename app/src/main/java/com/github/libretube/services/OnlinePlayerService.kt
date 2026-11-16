@@ -21,7 +21,6 @@ import androidx.media3.extractor.text.SubtitleExtractor
 import com.github.libretube.R
 import com.github.libretube.api.MediaServiceRepository
 import com.github.libretube.api.SubscriptionHelper
-import com.github.libretube.api.obj.Segment
 import com.github.libretube.api.obj.Streams
 import com.github.libretube.constants.IntentData
 import com.github.libretube.db.DatabaseHelper
@@ -76,7 +75,7 @@ open class OnlinePlayerService : AbstractPlayerService() {
         override fun onPlaybackStateChanged(playbackState: Int) {
             when (playbackState) {
                 Player.STATE_ENDED -> {
-                    if (!isTransitioning) playNextVideo(relatedStreams = streams?.relatedStreams)
+                    if (!isTransitioning) playNextVideo()
                 }
 
                 Player.STATE_IDLE -> {
@@ -161,11 +160,6 @@ open class OnlinePlayerService : AbstractPlayerService() {
                 SubscriptionHelper.submitFeedItemChange(it.toFeedItem())
             }
 
-            launch {
-                val segments = getSponsorBlockSegments()
-                withContext(Dispatchers.Main) { setSponsorBlockSegments(segments) }
-            }
-
             withContext(Dispatchers.Main) {
                 setStreamSource()
                 configurePlayer(timestampMs)
@@ -195,16 +189,6 @@ open class OnlinePlayerService : AbstractPlayerService() {
             playWhenReady = PlayerHelper.playAutomatically || isAudioOnlyPlayer
             prepare()
         }
-    }
-
-    private suspend fun getSponsorBlockSegments(): List<Segment> {
-        return runCatching {
-            MediaServiceRepository.instance.getSegments(
-                videoId,
-                sponsorBlockConfig.keys.toList(),
-                listOf("skip", "mute", "full", "poi", "chapter")
-            ).segments
-        }.getOrElse { emptyList() }
     }
 
     override fun navigateVideo(videoId: String) {

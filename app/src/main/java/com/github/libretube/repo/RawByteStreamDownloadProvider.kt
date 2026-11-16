@@ -9,10 +9,8 @@ import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.ResponseBody
 import okio.BufferedSink
 import okio.IOException
-import okio.source
 import java.time.Duration
 import kotlin.io.path.fileSize
 import kotlin.math.min
@@ -33,71 +31,34 @@ class RawByteStreamDownloadProvider(val url: HttpUrl) : DownloadProvider {
         item: DownloadItem,
         sink: BufferedSink,
     ): DownloadProgressResult {
-        val startByteOffset = item.path.fileSize()
-        val source =
-            startConnection(url, startByteOffset, item.downloadSize) ?: return DownloadProgressResult.Failed
-
-        val sourceByte = source.byteStream().source()
-
-        var totalRead = 0L
-        var lastRead = 0L
-        // Check if downloading is still active and read next bytes.
-        while (sourceByte
-                .read(sink.buffer, DownloadHelper.DOWNLOAD_CHUNK_SIZE)
-                .also { lastRead = it } != -1L
-        ) {
-            sink.emit()
-            totalRead += lastRead
-        }
-
-        withContext(Dispatchers.IO) {
-            sourceByte.close()
-            source.close()
-        }
-
-        return if (startByteOffset + totalRead < item.downloadSize) {
-            DownloadProgressResult.Progressed(totalRead)
-        } else {
-            DownloadProgressResult.DownloadComplete
-        }
-    }
-
-    private suspend fun startConnection(
-        url: HttpUrl,
-        alreadyRead: Long,
-        readLimit: Long?
-    ): ResponseBody? {
-        val limit = readLimit?.let {
-            min(readLimit, alreadyRead + BYTES_PER_REQUEST)
-        }?.toString().orEmpty()
-
-        val request = Request.Builder()
-            .url(url)
-            .method("GET", null)
-            .header("Range", "bytes=$alreadyRead-$limit")
-            .build()
-
         return withContext(Dispatchers.IO) {
-            // Retry connecting to server for n times.
+            val start = item.path.fileSize()
+            val end = min(if (item.downloadSize > 0) item.downloadSize - 1 else Long.MAX_VALUE,
+                start + BYTES_PER_REQUEST - 1)
+            if (end < start) return@withContext DownloadProgressResult.DownloadComplete
+            val request = Request.Builder().url(url).header("Range", "bytes=$start-$end").build()
             try {
-                val call = httpClient.newCall(request)
-                val response = call.execute()
-
-                if (response.code == 403) {
-                    response.close()
-                    Log.e(TAG(), "Got HTTP 403 while downloading: ${response.body.string()}")
-                    return@withContext null
-                } else if (response.code !in 200..299) {
-                    response.close()
-                    return@withContext null // TODO: print response.message
+                httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful || (start > 0 && response.code != 206)) {
+                        return@use DownloadProgressResult.Failed
+                    }
+                    val contentRange = response.header("Content-Range")
+                    if (response.code == 206 && contentRange?.substringAfter("bytes ")?.substringBefore("-")?.toLongOrNull() != start) {
+                        return@use DownloadProgressResult.Failed
+                    }
+                    val total = contentRange?.substringAfterLast("/")?.toLongOrNull()
+                        ?: item.downloadSize.takeIf { it > 0 }
+                    val bytes = sink.writeAll(response.body.source())
+                    sink.flush()
+                    when {
+                        bytes <= 0L -> DownloadProgressResult.Failed
+                        response.code == 200 || (total != null && start + bytes >= total) -> DownloadProgressResult.DownloadComplete
+                        else -> DownloadProgressResult.Progressed(bytes)
+                    }
                 }
-
-                return@withContext response.body
             } catch (e: IOException) {
-                Log.e(this.javaClass.name, e.printStackTrace().toString())
-                // TODO: forward error message
-
-                return@withContext null
+                Log.w(TAG(), "Audio download request failed", e)
+                DownloadProgressResult.Failed
             }
         }
     }

@@ -14,6 +14,7 @@ import com.github.libretube.R
 import com.github.libretube.constants.IntentData
 import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.enums.PlaylistType
+import com.github.libretube.db.obj.DownloadWithItems
 import com.github.libretube.extensions.toID
 import com.github.libretube.obj.ChannelIdentifier
 import com.github.libretube.parcelable.PlayerData
@@ -44,6 +45,16 @@ object NavigationHelper {
         }
     }
 
+    fun navigateDownloadedAudio(context: Context, videoId: String, queue: List<DownloadWithItems>) {
+        val ids = queue.filter { it.finishedAudio != null }.map { it.download.videoId }.distinct()
+        if (videoId !in ids) return
+        navigateVideo(
+            context,
+            PlayerData(videoId, isOffline = true, offlineQueueIds = ids),
+            audioOnlyPlayerRequested = true
+        )
+    }
+
     /**
      * Navigate to the given video using the other provided parameters as well
      * If the audio only mode is enabled, play it in the background, else as a normal video
@@ -64,8 +75,10 @@ object NavigationHelper {
             // otherwise, recreate the player
             if (playerData.isOffline != isOffline || playerData.videoId == null) return@runOnPlayerFragment false
 
+            if (playerData.offlineQueueIds.isNotEmpty()) return@runOnPlayerFragment false
+
             try {
-                PlayingQueue.clearAfterCurrent()
+                if (!playerData.keepQueue) PlayingQueue.clearAfterCurrent()
                 this.playVideo(playerData.videoId.toID())
 
                 if (audioOnlyPlayerRequested) {
@@ -90,8 +103,12 @@ object NavigationHelper {
             // otherwise, recreate the player
             if (playerData.isOffline != isOffline || playerData.videoId == null) return@runOnAudioPlayerFragment false
 
-            PlayingQueue.clearAfterCurrent()
-            this.playNextVideo(playerData.videoId.toID())
+            if (playerData.offlineQueueIds.isNotEmpty()) {
+                if (!startOfflineQueue(playerData)) return@runOnAudioPlayerFragment false
+            } else {
+                if (!playerData.keepQueue) PlayingQueue.clearAfterCurrent()
+                this.playNextVideo(playerData.videoId.toID())
+            }
 
             if (!audioOnlyPlayerRequested && !audioOnlyMode) {
                 // switch to video only player

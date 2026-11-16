@@ -183,6 +183,7 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
             SleepTimerSheet().show(childFragmentManager)
         }
 
+        binding.openVideo.isVisible = !isOffline
         binding.openVideo.setOnClickListener {
             val currentId = PlayingQueue.getCurrent()?.url?.toID()
             switchToVideoMode(currentId ?: return@setOnClickListener)
@@ -301,6 +302,15 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         activity.supportFragmentManager.commit {
             remove(this@AudioPlayerFragment)
         }
+    }
+
+    fun startOfflineQueue(playerData: PlayerData): Boolean {
+        val controller = playerController ?: return false
+        controller.sendCustomCommand(
+            AbstractPlayerService.startServiceCommand,
+            bundleOf(IntentData.playerData to playerData, IntentData.audioOnly to true)
+        )
+        return true
     }
 
     fun playNextVideo(videoId: String) {

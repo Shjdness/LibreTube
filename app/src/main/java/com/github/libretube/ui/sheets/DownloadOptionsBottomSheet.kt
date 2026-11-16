@@ -6,21 +6,18 @@ import androidx.core.os.bundleOf
 import androidx.fragment.app.setFragmentResult
 import androidx.media3.common.util.UnstableApi
 import com.github.libretube.api.obj.StreamItem
+import com.github.libretube.db.DatabaseHolder.Database
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.github.libretube.constants.IntentData
 import com.github.libretube.enums.ShareObjectType
 import com.github.libretube.enums.menuoption.DownloadListMenuOption
 import com.github.libretube.extensions.parcelable
-import com.github.libretube.extensions.serializable
 import com.github.libretube.extensions.toID
-import com.github.libretube.helpers.BackgroundHelper
-import com.github.libretube.helpers.ContextHelper
 import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.obj.ShareData
-import com.github.libretube.parcelable.PlayerData
-import com.github.libretube.ui.activities.NoInternetActivity
 import com.github.libretube.ui.dialogs.DownloadExportDialog
 import com.github.libretube.ui.dialogs.ShareDialog
-import com.github.libretube.ui.fragments.DownloadTab
 import com.github.libretube.util.PlayingQueue
 import com.github.libretube.util.PlayingQueueMode
 
@@ -29,7 +26,7 @@ class DownloadOptionsBottomSheet : BaseBottomSheet() {
     private lateinit var videoId: String
 
     private val exportFilePicker =
-        registerForActivityResult(ActivityResultContracts.CreateDocument("video/mp4")) { outputUri ->
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { outputUri ->
             if (outputUri == null) return@registerForActivityResult
 
             DownloadExportDialog().apply {
@@ -45,20 +42,12 @@ class DownloadOptionsBottomSheet : BaseBottomSheet() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val streamItem = arguments?.parcelable<StreamItem>(IntentData.streamItem)!!
         videoId = streamItem.url!!.toID()
-        val downloadTab = arguments?.serializable<DownloadTab>(IntentData.downloadTab)!!
-        val playlistId = arguments?.getString(IntentData.playlistId)
-
         val options = mutableListOf(
             DownloadListMenuOption.PlayOnBackground,
             DownloadListMenuOption.Share,
             DownloadListMenuOption.Delete,
             DownloadListMenuOption.Export,
         )
-
-        // can't navigate to video while in offline activity
-        if (ContextHelper.tryUnwrapActivity<NoInternetActivity>(requireContext()) == null) {
-            options += DownloadListMenuOption.GoToVideo
-        }
 
         val isSelectedVideoCurrentlyPlaying = PlayingQueue.getCurrent()?.url?.toID() == videoId
         if (!isSelectedVideoCurrentlyPlaying && PlayingQueue.isNotEmpty() && PlayingQueue.queueMode == PlayingQueueMode.OFFLINE) {
@@ -67,20 +56,12 @@ class DownloadOptionsBottomSheet : BaseBottomSheet() {
         }
 
         setItems(options) { which ->
-            val playerData = PlayerData(
-                videoId,
-                playlistId = playlistId,
-                downloadTab = downloadTab,
-                isOffline = true
-            )
-
             when (options[which]) {
                 DownloadListMenuOption.PlayOnBackground -> {
-                    BackgroundHelper.playOnBackground(requireContext(), playerData)
-                }
-
-                DownloadListMenuOption.GoToVideo -> {
-                    NavigationHelper.navigateVideo(requireContext(), playerData)
+                    lifecycleScope.launch {
+                        val item = Database.downloadDao().findById(videoId) ?: return@launch
+                        NavigationHelper.navigateDownloadedAudio(requireContext(), videoId, listOf(item))
+                    }
                 }
 
                 DownloadListMenuOption.Share -> {
@@ -108,7 +89,10 @@ class DownloadOptionsBottomSheet : BaseBottomSheet() {
                 }
 
                 DownloadListMenuOption.Export -> {
-                    exportFilePicker.launch(streamItem.title)
+                    lifecycleScope.launch {
+                        val audio = Database.downloadDao().findById(videoId)?.finishedAudio ?: return@launch
+                        exportFilePicker.launch(streamItem.title.orEmpty() + "." + audio.fileName.substringAfterLast('.'))
+                    }
                     // dismissing now would cause the exportFilePicker to be dropped before
                     // the file is actually chosen by the user
                     autoDismiss = false

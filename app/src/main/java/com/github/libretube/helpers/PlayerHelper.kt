@@ -40,14 +40,12 @@ import androidx.media3.ui.CaptionStyleCompat
 import com.github.libretube.LibreTubeApp
 import com.github.libretube.R
 import com.github.libretube.api.obj.ChapterSegment
-import com.github.libretube.api.obj.Segment
 import com.github.libretube.api.obj.Streams
 import com.github.libretube.api.obj.Subtitle
 import com.github.libretube.api.obj.WatchHistoryEntryMetadata
 import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.db.DatabaseHelper
 import com.github.libretube.enums.PlayerEvent
-import com.github.libretube.enums.SbSkipOptions
 import com.github.libretube.enums.menuoption.RepeatModeBottomSheetItem
 import com.github.libretube.extensions.TAG
 import com.github.libretube.extensions.seekBy
@@ -66,7 +64,6 @@ import kotlin.time.Clock
 object PlayerHelper {
     private const val ACTION_MEDIA_CONTROL = "media_control"
     const val CONTROL_TYPE = "control_type"
-    const val SPONSOR_HIGHLIGHT_CATEGORY = "poi_highlight"
     const val ROLE_FLAG_AUTO_GEN_SUBTITLE = C.ROLE_FLAG_SUPPLEMENTARY
     private const val MINIMUM_BUFFER_DURATION = 1000 * 10 // exo default is 50s
 
@@ -88,16 +85,6 @@ object PlayerHelper {
     const val MAX_BUFFER_DELAY = 10 * 60 * 1000L
 
     val repeatModes: List<RepeatModeBottomSheetItem> = RepeatModeBottomSheetItem.entries
-
-    /**
-     * A list of all categories that are not disabled by default
-     * Also update `sponsorblock_settings.xml` when modifying this!
-     */
-    private val sbDefaultValues = mapOf(
-        "sponsor" to SbSkipOptions.AUTOMATIC,
-        "selfpromo" to SbSkipOptions.AUTOMATIC,
-        "exclusive_access" to SbSkipOptions.AUTOMATIC,
-    )
 
     /**
      * Create a base64 encoded DASH stream manifest
@@ -164,12 +151,6 @@ object PlayerHelper {
             false
         )
 
-    val relatedStreamsEnabled: Boolean
-        get() = PreferenceHelper.getBoolean(
-            PreferenceKeys.RELATED_STREAMS,
-            true
-        )
-
     val pausePlayerOnScreenOffEnabled: Boolean
         get() = PreferenceHelper.getBoolean(
             PreferenceKeys.PAUSE_ON_SCREEN_OFF,
@@ -214,24 +195,6 @@ object PlayerHelper {
             PreferenceKeys.BUFFERING_GOAL,
             "50"
         ).toInt() * 1000
-
-    val sponsorBlockEnabled: Boolean
-        get() = PreferenceHelper.getBoolean(
-            "sb_enabled_key",
-            true
-        )
-
-    val sponsorBlockNotifications: Boolean
-        get() = PreferenceHelper.getBoolean(
-            "sb_notifications_key",
-            true
-        )
-
-    private val sponsorBlockHighlights: Boolean
-        get() = PreferenceHelper.getBoolean(
-            PreferenceKeys.SB_HIGHLIGHTS,
-            true
-        )
 
     val defaultSubtitleCode: String?
         get() {
@@ -501,58 +464,6 @@ object PlayerHelper {
     }
 
     /**
-     * get the categories for sponsorBlock
-     */
-    fun getSponsorBlockCategories(): MutableMap<String, SbSkipOptions> {
-        val categories: MutableMap<String, SbSkipOptions> = mutableMapOf()
-
-        for (category in LibreTubeApp.instance.resources.getStringArray(
-            R.array.sponsorBlockSegments
-        )) {
-            val defaultCategoryValue = sbDefaultValues.getOrDefault(category, SbSkipOptions.OFF)
-            val skipOption = PreferenceHelper
-                .getString("${category}_category", defaultCategoryValue.name)
-                .let { SbSkipOptions.valueOf(it.uppercase()) }
-
-            if (skipOption != SbSkipOptions.OFF) {
-                categories[category] = skipOption
-            }
-        }
-
-        // Add the highlights category to display in the chapters
-        if (sponsorBlockHighlights) categories[SPONSOR_HIGHLIGHT_CATEGORY] = SbSkipOptions.OFF
-        return categories
-    }
-
-    /**
-     * Check for SponsorBlock segments matching the current player position
-     * Please make sure to set [Segment#skipped] to true after seeking to the segment end
-     *
-     * @param segments List of the SponsorBlock segments
-     * @return If segment found and should skip manually, the end position of the segment in ms, otherwise null
-     */
-    fun Player.getCurrentSegment(
-        segments: List<Segment>,
-        sponsorBlockConfig: MutableMap<String, SbSkipOptions>,
-    ): Pair<Segment, SbSkipOptions>? {
-        for (segment in segments.filter { it.category != SPONSOR_HIGHLIGHT_CATEGORY }) {
-            val (start, end) = segment.segmentStartAndEnd
-            val (segmentStart, segmentEnd) = (start * 1000f).toLong() to (end * 1000f).toLong()
-
-            // avoid seeking to the same segment multiple times, e.g. when the SB segment is at the end of the video
-            if (segmentEnd - currentPosition in 0..1000) continue
-            if (currentPosition !in segmentStart until segmentEnd) continue
-
-            val key = sponsorBlockConfig[segment.category]
-            if (key == SbSkipOptions.AUTOMATIC_ONCE && segment.skipped) continue
-
-            return segment to (key ?: SbSkipOptions.AUTOMATIC)
-        }
-
-        return null
-    }
-
-    /**
      * Get the name of the currently played chapter
      */
     fun getCurrentChapterIndex(currentPositionMs: Long, chapters: List<ChapterSegment>): Int? {
@@ -564,7 +475,6 @@ object PlayerHelper {
             ?.takeIf { index ->
                 val chapter = chapters[index]
                 // remove the video highlight if it's already longer ago than [ChapterSegment.HIGHLIGHT_LENGTH],
-                // otherwise the SponsorBlock highlight would be shown from its starting point to the end
                 val isWithinMaxHighlightDuration =
                     (currentPositionSeconds - chapter.start) < ChapterSegment.HIGHLIGHT_LENGTH
                 chapter.highlightDrawable == null || isWithinMaxHighlightDuration

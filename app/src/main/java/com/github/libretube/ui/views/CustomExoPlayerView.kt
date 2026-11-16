@@ -67,7 +67,6 @@ import com.github.libretube.services.AbstractPlayerService
 import com.github.libretube.ui.base.BaseActivity
 import com.github.libretube.ui.controllers.FullscreenGestureAnimationController
 import com.github.libretube.ui.dialogs.SubmitDeArrowDialog
-import com.github.libretube.ui.dialogs.SubmitSegmentDialog
 import com.github.libretube.ui.extensions.toggleSystemBars
 import com.github.libretube.ui.interfaces.CustomPlayerCallback
 import com.github.libretube.ui.interfaces.PlayerGestureOptions
@@ -160,8 +159,6 @@ class CustomExoPlayerView(
     var currentWindow: Window? = null
 
     private var selectedResolution: Int? = null
-    var sponsorBlockAutoSkip = true
-        private set
 
     private var selectedAudioLanguageAndRoleFlags: Pair<String?, @C.RoleFlags Int>? = null
     private lateinit var playerCallback: CustomPlayerCallback
@@ -315,31 +312,7 @@ class CustomExoPlayerView(
             updateResolution(isFullscreen)
         }
 
-        val updateSbImageResource = {
-            binding.sbToggle.setImageResource(
-                if (sponsorBlockAutoSkip) R.drawable.ic_sb_enabled else R.drawable.ic_sb_disabled
-            )
-        }
-        updateSbImageResource()
-        binding.sbToggle.setOnClickListener {
-            sponsorBlockAutoSkip = !sponsorBlockAutoSkip
-            (player as? MediaController)?.sendCustomCommand(
-                AbstractPlayerService.runPlayerActionCommand, bundleOf(
-                    PlayerCommand.SET_SB_AUTO_SKIP_ENABLED.name to sponsorBlockAutoSkip
-                )
-            )
-            updateSbImageResource()
-        }
-
         syncQueueButtons()
-
-        binding.sbSubmit.isVisible =
-            PreferenceHelper.getBoolean(PreferenceKeys.CONTRIBUTE_TO_SB, false)
-        binding.sbSubmit.setOnClickListener {
-            val submitSegmentDialog = SubmitSegmentDialog()
-            submitSegmentDialog.arguments = buildSbBundleArgs() ?: return@setOnClickListener
-            submitSegmentDialog.show((context as BaseActivity).supportFragmentManager, null)
-        }
 
         binding.dearrowSubmit.isVisible =
             PreferenceHelper.getBoolean(PreferenceKeys.CONTRIBUTE_TO_DEARROW, false)
@@ -428,17 +401,8 @@ class CustomExoPlayerView(
         val duration = player?.duration?.div(1000) ?: return
         if (duration < 0) return
 
-        val durationWithoutSegments = duration - playerViewModel?.segments?.value.orEmpty().sumOf {
-            val (start, end) = it.segmentStartAndEnd
-            end.toDouble() - start.toDouble()
-        }.toLong()
         val durationString = DateUtils.formatElapsedTime(duration)
-
-        binding.duration.text = if (durationWithoutSegments < duration) {
-            "$durationString (${DateUtils.formatElapsedTime(durationWithoutSegments)})"
-        } else {
-            durationString
-        }
+        binding.duration.text = durationString
     }
 
     private fun buildSbBundleArgs(): Bundle? {

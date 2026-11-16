@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import kotlinx.coroutines.flow.Flow
 import com.github.libretube.db.obj.Download
 import com.github.libretube.db.obj.DownloadChapter
 import com.github.libretube.db.obj.DownloadItem
@@ -14,7 +15,6 @@ import com.github.libretube.db.obj.DownloadPlaylist
 import com.github.libretube.db.obj.DownloadPlaylistVideosCrossRef
 import com.github.libretube.db.obj.DownloadPlaylistWithDownload
 import com.github.libretube.db.obj.DownloadPlaylistWithDownloadWithItems
-import com.github.libretube.db.obj.DownloadSponsorBlockSegment
 import com.github.libretube.db.obj.DownloadWithItems
 
 @Dao
@@ -22,6 +22,10 @@ interface DownloadDao {
     @Transaction
     @Query("SELECT * FROM download")
     suspend fun getAll(): List<DownloadWithItems>
+
+    @Transaction
+    @Query("SELECT * FROM download")
+    fun observeDownloads(): Flow<List<DownloadWithItems>>
 
     @Transaction
     @Query("SELECT * FROM download WHERE videoId = :videoId")
@@ -46,8 +50,8 @@ interface DownloadDao {
     @Query("DELETE FROM downloaditem WHERE id = :id")
     suspend fun deleteDownloadItemById(id: Int)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertDownload(download: Download)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertDownload(download: Download): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDownloadChapter(downloadChapter: DownloadChapter)
@@ -68,11 +72,7 @@ interface DownloadDao {
 
     @Transaction
     @Query("SELECT * FROM downloadPlaylist WHERE playlistId = :playlistId")
-    suspend fun getDownloadPlaylistById(playlistId: String): DownloadPlaylistWithDownload
-
-    @Transaction
-    @Query("SELECT * FROM downloadPlaylist WHERE playlistId = :playlistId")
-    suspend fun getDownloadPlaylistByIdIncludingItems(playlistId: String): DownloadPlaylistWithDownloadWithItems
+    suspend fun getDownloadPlaylistByIdIncludingItems(playlistId: String): DownloadPlaylistWithDownloadWithItems?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlaylist(downloadPlaylist: DownloadPlaylist)
@@ -81,25 +81,17 @@ interface DownloadDao {
      * Connect a [DownloadPlaylist] to a [Download] to link the playlist to the video.
      */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertPlaylistVideoConnection(crossRef: DownloadPlaylistVideosCrossRef)
+    suspend fun insertPlaylistVideoConnections(crossRefs: List<DownloadPlaylistVideosCrossRef>)
 
-    @Suppress("DEPRECATION")
-    suspend fun deletePlaylistIncludingVideoRefs(playlist: DownloadPlaylist) {
-        deletePlaylistCrossRef(playlist.playlistId)
-        deletePlaylist(playlist)
+    @Transaction
+    suspend fun cachePlaylist(playlist: DownloadPlaylist, links: List<DownloadPlaylistVideosCrossRef>, replaceLinks: Boolean) {
+        insertPlaylist(playlist)
+        if (replaceLinks) clearPlaylistVideoConnections(playlist.playlistId)
+        insertPlaylistVideoConnections(links)
     }
 
-    @Delete
-    @Deprecated("Call deletePlaylistIncludingVideoRefs instead!")
-    suspend fun deletePlaylist(playlist: DownloadPlaylist)
+    @Query("DELETE FROM downloadPlaylistVideosCrossRef WHERE playlistId = :playlistId")
+    suspend fun clearPlaylistVideoConnections(playlistId: String)
 
-    @Query("DELETE FROM downloadplaylistvideoscrossref WHERE playlistId = :playlistId")
-    @Deprecated("Call deletePlaylistIncludingVideoRefs instead!")
-    suspend fun deletePlaylistCrossRef(playlistId: String)
 
-    @Query("SELECT * FROM downloadplaylistvideoscrossref WHERE playlistId = :playlistId")
-    suspend fun getVideoIdsFromPlaylist(playlistId: String): List<DownloadPlaylistVideosCrossRef>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertSponsorBlockSegments(segments: List<DownloadSponsorBlockSegment>)
 }

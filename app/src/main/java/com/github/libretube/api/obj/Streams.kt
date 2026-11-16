@@ -1,11 +1,8 @@
 package com.github.libretube.api.obj
 
 import android.os.Parcelable
-import com.github.libretube.db.obj.DownloadItem
-import com.github.libretube.enums.FileType
 import com.github.libretube.extensions.toLocalDate
 import com.github.libretube.json.SafeInstantSerializer
-import com.github.libretube.parcelable.DownloadData
 import kotlinx.datetime.Instant
 import kotlinx.parcelize.IgnoredOnParcel
 import kotlinx.parcelize.Parcelize
@@ -55,33 +52,6 @@ data class Streams(
 ): Parcelable {
     @IgnoredOnParcel
     val isLive = livestream || duration <= 0
-
-    fun toDownloadItems(downloadData: DownloadData): List<DownloadItem> {
-        val (id, videoFormat, videoQuality, audioFormat, audioQuality, audioTrackLocale, subCode) = downloadData
-        val items = mutableListOf<DownloadItem>()
-
-        if (!videoQuality.isNullOrEmpty() && !videoFormat.isNullOrEmpty()) {
-            val stream = videoStreams.find {
-                it.quality == videoQuality && it.format == videoFormat
-            }
-            stream?.toDownloadItem(FileType.VIDEO, id)?.let { items.add(it) }
-        }
-
-        if (!audioQuality.isNullOrEmpty() && !audioFormat.isNullOrEmpty()) {
-            val stream = audioStreams.find {
-                it.quality == audioQuality && it.format == audioFormat && it.audioTrackLocale == audioTrackLocale
-            }
-            stream?.toDownloadItem(FileType.AUDIO, id)?.let { items.add(it) }
-        }
-
-        if (!subCode.isNullOrEmpty()) {
-            // TODO: doesn't support track types, i.e. if there are two caption tracks for the same language
-            val subtitle = subtitles.find { it.code == subCode }
-            subtitle?.toDownloadItem(id)?.let { items.add(it) }
-        }
-
-        return items
-    }
 
     fun toStreamItem(videoId: String): StreamItem {
         return StreamItem(

@@ -17,6 +17,9 @@ import com.github.libretube.extensions.toastFromMainDispatcher
 import com.github.libretube.helpers.BackgroundHelper
 import com.github.libretube.helpers.ContextHelper
 import com.github.libretube.helpers.DownloadHelper
+import com.github.libretube.helpers.NavigationHelper
+import com.github.libretube.helpers.NetworkHelper
+import kotlin.coroutines.cancellation.CancellationException
 import com.github.libretube.obj.ShareData
 import com.github.libretube.parcelable.PlayerData
 
@@ -79,18 +82,28 @@ class PlaylistOptionsBottomSheet : BaseBottomSheet() {
         when (playListOption) {
             // play the playlist in the background
             PlayListBottomSheetItem.PlayOnBackground -> {
+                val context = requireContext()
+                val online = NetworkHelper.isNetworkAvailable(context)
                 val playlist = withContext(Dispatchers.IO) {
-                    runCatching { PlaylistsHelper.getPlaylist(playlistId, playlistType) }
-                }.getOrElse {
-                    context?.toastFromMainDispatcher(R.string.error)
-                    return
+                    try {
+                        if (online || playlistType == PlaylistType.PRIVATE) {
+                            PlaylistsHelper.getPlaylist(playlistId, playlistType)
+                        } else PlaylistsHelper.getCachedPlaylist(playlistId)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        PlaylistsHelper.getCachedPlaylist(playlistId)
+                    }
                 }
-
-                playlist.relatedStreams.firstOrNull()?.let {
-                    BackgroundHelper.playOnBackground(
-                        requireContext(),
-                        PlayerData(it.url!!.toID(), playlistId = playlistId)
-                    )
+                val ids = playlist?.relatedStreams.orEmpty().mapNotNull { it.url?.toID() }
+                val first = ids.firstOrNull()
+                val localQueue = DownloadHelper.getDownloadedAudioQueue(ids)
+                val localId = localQueue.firstOrNull { it.download.videoId == first }?.download?.videoId
+                    ?: localQueue.firstOrNull()?.download?.videoId?.takeUnless { online }
+                when {
+                    localId != null -> NavigationHelper.navigateDownloadedAudio(context, localId, localQueue)
+                    online && first != null -> BackgroundHelper.playOnBackground(context, PlayerData(first, playlistId = playlistId))
+                    else -> context.toastFromMainDispatcher(R.string.audio_not_downloaded)
                 }
             }
 
@@ -151,9 +164,8 @@ class PlaylistOptionsBottomSheet : BaseBottomSheet() {
             }
 
             PlayListBottomSheetItem.Download -> {
-                DownloadHelper.startDownloadPlaylistDialog(
+                DownloadHelper.downloadPlaylistAudio(
                     requireContext(),
-                    mFragmentManager,
                     playlistId,
                     playlistName,
                     playlistType

@@ -21,5 +21,4 @@ sealed class DownloadListMenuOption(
     data object Share : DownloadListMenuOption(R.string.share, R.drawable.ic_share)
     data object Delete : DownloadListMenuOption(R.string.delete, R.drawable.ic_delete)
     data object Export : DownloadListMenuOption(R.string.export, R.drawable.ic_export)
-    data object GoToVideo : DownloadListMenuOption(R.string.go_to_video, R.drawable.ic_play)
 }

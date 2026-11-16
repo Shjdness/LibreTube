@@ -64,7 +64,6 @@ import com.github.libretube.ui.models.SearchViewModel
 import com.github.libretube.ui.models.SubscriptionsViewModel
 import com.github.libretube.ui.preferences.BackupRestoreSettings
 import com.github.libretube.ui.preferences.BackupRestoreSettings.Companion.FILETYPE_ANY
-import com.github.libretube.util.UpdateChecker
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.navigation.NavigationBarMenuView
 import kotlinx.coroutines.Dispatchers
@@ -115,14 +114,6 @@ class MainActivity : AbstractPlayerHostActivity() {
         if (!PreferenceHelper.getBoolean(PreferenceKeys.WELCOME_ACTIVITY_FINISHED, false)) {
             val welcomeIntent = Intent(this, WelcomeActivity::class.java)
             startActivity(welcomeIntent)
-            finish()
-            return
-        }
-
-        // show noInternet Activity if no internet available on app startup
-        if (!NetworkHelper.isNetworkAvailable(this)) {
-            val noInternetIntent = Intent(this, NoInternetActivity::class.java)
-            startActivity(noInternetIntent)
             finish()
             return
         }
@@ -180,13 +171,6 @@ class MainActivity : AbstractPlayerHostActivity() {
             binding.root.scene.setTransition(transition)
         }
 
-        // Check update automatically
-        if (PreferenceHelper.getBoolean(PreferenceKeys.AUTOMATIC_UPDATE_CHECKS, false)) {
-            lifecycleScope.launch(Dispatchers.IO) {
-                UpdateChecker(this@MainActivity).checkUpdate(false)
-            }
-        }
-
         // set the action bar for the activity
         setSupportActionBar(binding.toolbar)
 
@@ -200,6 +184,8 @@ class MainActivity : AbstractPlayerHostActivity() {
         } catch (_: Exception) {
             R.id.homeFragment
         }
+
+        if (!NetworkHelper.isNetworkAvailable(this)) startFragmentId = R.id.libraryFragment
 
         // set default tab as start fragment
         navController.graph = navController.navInflater.inflate(R.navigation.nav).also {
@@ -363,6 +349,8 @@ class MainActivity : AbstractPlayerHostActivity() {
         val searchItem = menu.findItem(R.id.action_search)
         this.searchItem = searchItem
         searchView = searchItem.actionView as SearchView
+        binding.toolbar.setNavigationContentDescription(R.string.search_hint)
+        binding.toolbar.setNavigationOnClickListener { searchItem.expandActionView() }
 
         // automatically set a different search icon in the playlists
         navController.addOnDestinationChangedListener { _, destination, _ ->
@@ -381,7 +369,7 @@ class MainActivity : AbstractPlayerHostActivity() {
                 SearchType.ONLINE -> R.drawable.ic_search
             }
 
-            searchItem.setIcon(searchIconResource)
+            binding.toolbar.setNavigationIcon(searchIconResource)
         }
 
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {

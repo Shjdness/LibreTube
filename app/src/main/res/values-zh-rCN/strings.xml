@@ -560,4 +560,8 @@
     <string name="channel_sort_latest">最新</string>
     <string name="channel_sort_popular">受欢迎</string>
     <string name="channel_sort_oldest">最旧</string>
+    <string name="download_channel_count">%1$s（%2$d 条）</string>
+    <string name="audio_not_downloaded">此音频尚未下载</string>
+    <string name="license_and_source">许可证与源代码</string>
+    <string name="fork_license_notice">本版本基于 LibreTube 贡献者的作品修改，按 GNU GPL 第 3 版或更高版本授权。本软件不提供担保。源代码与修改记录：https://github.com/Shjdness/LibreTube/tree/custom</string>
 </resources>

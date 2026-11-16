@@ -88,7 +88,7 @@ class SabrDownloadProvider(
         val endSegmentNumber = downloadHandle.sabrClient.getEndSegmentNumber(
             downloadHandle.streamRepresentation.formatId()
         )
-        return if (endSegmentNumber != null && downloadHandle.nextSegmentNumber < endSegmentNumber) {
+        return if (endSegmentNumber == null || downloadHandle.nextSegmentNumber <= endSegmentNumber) {
             val downloadedBytesLength = segment.data.sumOf { it.size }
             DownloadProgressResult.Progressed(downloadedBytesLength.toLong())
         } else {

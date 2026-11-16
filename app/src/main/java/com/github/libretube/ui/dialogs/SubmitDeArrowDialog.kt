@@ -85,7 +85,7 @@ class SubmitDeArrowDialog: DialogFragment() {
         val context = requireContext().applicationContext
         requireDialog().hide()
 
-        val userID = PreferenceHelper.getSponsorBlockUserID()
+        val userID = PreferenceHelper.getDeArrowUserId()
         val userAgent = TextUtils.getUserAgent(context)
         val title = binding.dearrowTitle.selectedItem
             .takeIf { it.isNotEmpty() && binding.titleCheckbox.isChecked }

@@ -15,43 +15,28 @@ import androidx.activity.OnBackPressedCallback
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
-import androidx.core.os.bundleOf
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
-import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
-import androidx.fragment.app.commit
-import androidx.fragment.app.replace
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import androidx.viewpager2.adapter.FragmentStateAdapter
 import com.github.libretube.R
-import com.github.libretube.constants.IntentData
 import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.databinding.FragmentDownloadContentBinding
-import com.github.libretube.databinding.FragmentDownloadsBinding
 import com.github.libretube.db.DatabaseHolder.Database
-import com.github.libretube.db.obj.Download
-import com.github.libretube.db.obj.DownloadPlaylistWithDownload
 import com.github.libretube.db.obj.DownloadWithItems
-import com.github.libretube.db.obj.filterByTab
 import com.github.libretube.extensions.ceilHalf
 import com.github.libretube.extensions.dpToPx
 import com.github.libretube.extensions.formatAsFileSize
-import com.github.libretube.extensions.serializable
-import com.github.libretube.extensions.setOnDismissListener
 import com.github.libretube.helpers.DownloadHelper
 import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.helpers.PreferenceHelper
 import com.github.libretube.obj.DownloadStatus
 import com.github.libretube.obj.bottomsheetitem.BottomSheetItem
 import com.github.libretube.obj.bottomsheetitem.BottomSheetItemTitle
-import com.github.libretube.parcelable.PlayerData
-import com.github.libretube.receivers.DownloadReceiver
 import com.github.libretube.services.DownloadService
-import com.github.libretube.ui.adapters.DownloadPlaylistAdapter
 import com.github.libretube.ui.adapters.DownloadsAdapter
 import com.github.libretube.ui.base.DynamicLayoutManagerFragment
 import com.github.libretube.ui.extensions.setOnBackPressed
@@ -60,20 +45,18 @@ import com.github.libretube.ui.models.DownloadsViewModel
 import com.github.libretube.ui.sheets.BaseBottomSheet
 import com.github.libretube.ui.viewholders.DownloadsViewHolder
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.tabs.TabLayoutMediator
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.parcelize.Parcelize
-import kotlin.io.path.fileSize
 
-enum class DownloadTab {
-    VIDEO,
-    AUDIO,
-    PLAYLIST
-}
+import android.content.BroadcastReceiver
+import android.view.LayoutInflater
+import android.view.ViewGroup
+import android.widget.TextView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.recyclerview.widget.ListAdapter
+import com.github.libretube.ui.adapters.callbacks.DiffUtilItemCallback
 
 @Parcelize
 sealed class DownloadSortingOrder(
@@ -129,107 +112,49 @@ sealed class DownloadSortingOrder(
     )
 }
 
-class DownloadsFragment : Fragment(R.layout.fragment_downloads) {
-    private var _binding: FragmentDownloadsBinding? = null
-    private val binding get() = _binding!!
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        _binding = FragmentDownloadsBinding.bind(view)
-        super.onViewCreated(view, savedInstanceState)
-
-        binding.downloadsPager.adapter = DownloadsFragmentAdapter(this)
-
-        TabLayoutMediator(binding.tabLayout, binding.downloadsPager) { tab, position ->
-            tab.text = when (position) {
-                DownloadTab.VIDEO.ordinal -> getString(R.string.video)
-                DownloadTab.AUDIO.ordinal -> getString(R.string.audio)
-                DownloadTab.PLAYLIST.ordinal -> getString(R.string.playlists)
-                else -> throw IllegalArgumentException()
-            }
-        }.attach()
-    }
-
-    fun bindDownloadService() {
-        childFragmentManager.fragments.filterIsInstance<DownloadsFragmentPage>().forEach {
-            it.bindDownloadService()
-        }
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        _binding = null
-    }
-}
-
-class DownloadsFragmentAdapter(fragment: Fragment) : FragmentStateAdapter(fragment) {
-    override fun getItemCount() = DownloadTab.entries.size
-
-    override fun createFragment(position: Int): Fragment {
-        if (position == DownloadTab.PLAYLIST.ordinal) {
-            return PlaylistDownloadsFragmentPage()
-        }
-
-        return DownloadsFragmentPage().apply {
-            arguments = bundleOf(IntentData.downloadTab to DownloadTab.entries[position])
-        }
-    }
-}
 
 @SuppressLint("UnsafeOptInUsageError")
-class DownloadsFragmentPage : DynamicLayoutManagerFragment(R.layout.fragment_download_content) {
-    private lateinit var adapter: DownloadsAdapter
+class DownloadsFragment : DynamicLayoutManagerFragment(R.layout.fragment_download_content) {
     private var _binding: FragmentDownloadContentBinding? = null
     private val binding get() = _binding!!
-
-    private val playerViewModel: CommonPlayerViewModel by activityViewModels()
     private val downloadsModel: DownloadsViewModel by activityViewModels()
+    private val playerModel: CommonPlayerViewModel by activityViewModels()
+    private lateinit var audioAdapter: DownloadsAdapter
+    private lateinit var folderAdapter: DownloadFolderAdapter
+    private lateinit var folderBack: OnBackPressedCallback
+    private var items = emptyList<DownloadWithItems>()
+    private var channel: String? = null
+    private var sortIndex = 0
+    private var service: DownloadService? = null
+    private var bound = false
+    private var progressJob: Job? = null
 
-    private var binder: DownloadService.LocalBinder? = null
-    private val downloadReceiver = DownloadReceiver()
-
-    // Either downloadTab or downloadPlaylistId are set, never both at the same time!
-    private lateinit var downloadTab: DownloadTab
-    private var downloadPlaylistId: String? = null
-
-    private val activeDownloadIds = mutableSetOf<Int>()
-
-    private var selectedSortType
-        get() = PreferenceHelper.getInt(
-            PreferenceKeys.SELECTED_DOWNLOAD_SORT_TYPE, DownloadSortingOrder.Oldest.ordinal
-        )
-        set(value) {
-            PreferenceHelper.putInt(PreferenceKeys.SELECTED_DOWNLOAD_SORT_TYPE, value)
-        }
-
-    private val serviceConnection = object : ServiceConnection {
-        var isBound = false
-        var job: Job? = null
-
-        override fun onServiceConnected(name: ComponentName?, iBinder: IBinder?) {
-            binder = iBinder as DownloadService.LocalBinder
-            isBound = true
-            job?.cancel()
-            job = lifecycleScope.launch {
-                binder?.getService()?.downloadFlow?.collectLatest {
-                    updateProgress(it.first, it.second)
-                }
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            val connected = (binder as? DownloadService.LocalBinder)?.getService() ?: return
+            service = connected
+            progressJob?.cancel()
+            progressJob = viewLifecycleOwner.lifecycleScope.launch {
+                connected.downloadFlow.collect { (id, status) -> updateProgress(id, status) }
             }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
-            binder = null
-            isBound = false
+            service = null
+            progressJob?.cancel()
         }
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-        this.downloadTab = requireArguments().serializable(IntentData.downloadTab)!!
-        this.downloadPlaylistId = requireArguments().getString(IntentData.playlistId)
-
-        if (downloadTab == DownloadTab.PLAYLIST && downloadPlaylistId == null)
-            throw IllegalArgumentException("downloadTab unspecified or missing playlist id")
+    private val receiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                DownloadService.ACTION_SERVICE_STARTED -> bindDownloadService()
+                DownloadService.ACTION_SERVICE_STOPPED -> {
+                    unbindDownloadService()
+                    if (_binding != null) render()
+                }
+            }
+        }
     }
 
     override fun setLayoutManagers(gridItems: Int) {
@@ -240,424 +165,208 @@ class DownloadsFragmentPage : DynamicLayoutManagerFragment(R.layout.fragment_dow
         _binding = FragmentDownloadContentBinding.bind(view)
         super.onViewCreated(view, savedInstanceState)
 
-        adapter =
-            DownloadsAdapter(
-                requireContext(), downloadTab, downloadPlaylistId,
-                currentSortOrder = {
-                    DownloadSortingOrder.entries[selectedSortType]
-                }
-            ) { !toggleDownload(it) }
-        binding.downloadsRecView.adapter = adapter
-
-        val filterOptions = DownloadSortingOrder.entries
-        binding.sortType.text = filterOptions[selectedSortType].title.getText(requireContext())
-
-        lifecycleScope.launch(Dispatchers.Main) {
-            val playlistItems = downloadPlaylistId?.let { playlistId ->
-                val playlist = withContext(Dispatchers.IO) {
-                    Database.downloadDao().getDownloadPlaylistById(playlistId)
-                }
-
-                binding.playlistName.text = playlist.downloadPlaylist.title
-                binding.playlistName.isVisible = true
-
-                playlist.downloadVideos.map { it.videoId }
-            }
-
-            val downloads = withContext(Dispatchers.IO) {
-                Database.downloadDao().getAll()
-            }.let { downloads ->
-                if (downloadTab != DownloadTab.PLAYLIST) downloads.filterByTab(downloadTab)
-                else downloads.filter { playlistItems.orEmpty().contains(it.download.videoId) }
-            }
-
-            submitDownloadList(downloads)
-
-            binding.sortType.setOnClickListener {
-                BaseBottomSheet().setItems(filterOptions.toList()) { index ->
-                    if (index == selectedSortType) return@setItems
-                    selectedSortType = index
-
-                    binding.sortType.text = filterOptions[index].title.getText(requireContext())
-                    submitDownloadList(downloads)
-                }.show(childFragmentManager)
-            }
-
-            downloadsModel.searchQuery.observe(viewLifecycleOwner) {
-                submitDownloadList(downloads)
-            }
-
-            binding.downloadsRecView.setOnDismissListener { position ->
-                adapter.showDeleteDialog(requireContext(), position)
-                // put the item back to the center, as it's currently out of the screen
-                adapter.restoreItem(position)
-            }
-
-            binding.downloadsRecView.adapter?.registerAdapterDataObserver(
-                object : RecyclerView.AdapterDataObserver() {
-                    override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) {
-                        super.onItemRangeRemoved(positionStart, itemCount)
-                        toggleVisibilities()
-                    }
-
-                    override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
-                        super.onItemRangeInserted(positionStart, itemCount)
-                        // ensure that after searching with no results,
-                        // the nothing here placeholder is hidden again so that
-                        // results are visible for the queries made afterwards
-                        toggleVisibilities()
-                    }
-                }
-            )
-
-            toggleVisibilities()
+        channel = savedInstanceState?.getString("channel")
+        sortIndex = PreferenceHelper.getInt(PreferenceKeys.SELECTED_DOWNLOAD_SORT_TYPE, DownloadSortingOrder.Oldest.ordinal)
+            .coerceIn(DownloadSortingOrder.entries.indices)
+        folderBack = setOnBackPressed {
+            channel = null
+            render()
         }
-
+        audioAdapter = DownloadsAdapter(requireContext(), ::toggleDownload) { item ->
+            NavigationHelper.navigateDownloadedAudio(requireContext(), item.download.videoId, audioAdapter.currentList)
+        }
+        folderAdapter = DownloadFolderAdapter { key ->
+            channel = key
+            render()
+            binding.downloadsRecView.scrollToPosition(0)
+        }
+        binding.channelFilter.setOnClickListener {
+            channel = null
+            render()
+        }
+        binding.sortType.setOnClickListener {
+            BaseBottomSheet().setItems(DownloadSortingOrder.entries) { index ->
+                sortIndex = index
+                PreferenceHelper.putInt(PreferenceKeys.SELECTED_DOWNLOAD_SORT_TYPE, index)
+                render()
+            }.show(childFragmentManager)
+        }
         binding.resumeAll.setOnClickListener {
-            resumeAllDownloads()
-
-            binding.resumeAll.isGone = true
+            ContextCompat.startForegroundService(requireContext(),
+                Intent(requireContext(), DownloadService::class.java).setAction(DownloadService.ACTION_RESUME_ALL))
         }
-
-        binding.deleteAll.setOnClickListener {
-            showDeleteAllDialog(binding.root.context, adapter)
-        }
-
+        binding.deleteAll.setOnClickListener { showDeleteAllDialog() }
         binding.shuffleAll.setOnClickListener {
-            NavigationHelper.navigateVideo(
-                requireContext(),
-                playerData = PlayerData(
-                    videoId = null,
-                    playlistId = downloadPlaylistId,
-                    downloadTab = downloadTab,
-                    shuffle = true,
-                    isOffline = true,
-                ),
-                audioOnlyPlayerRequested = downloadTab == DownloadTab.AUDIO
-            )
+            val queue = audioAdapter.currentList.filter { it.finishedAudio != null }.shuffled()
+            val first = queue.firstOrNull() ?: return@setOnClickListener
+            NavigationHelper.navigateDownloadedAudio(requireContext(), first.download.videoId, queue)
         }
-
-        playerViewModel.isMiniPlayerVisible.observe(viewLifecycleOwner) { isMiniPlayerVisible ->
+        playerModel.isMiniPlayerVisible.observe(viewLifecycleOwner) { visible ->
             binding.shuffleAll.updateLayoutParams<MarginLayoutParams> {
-                bottomMargin = (if (isMiniPlayerVisible) 64f else 16f).dpToPx()
+                bottomMargin = (if (visible) 64f else 16f).dpToPx()
             }
         }
+        downloadsModel.searchQuery.observe(viewLifecycleOwner) { render() }
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                Database.downloadDao().observeDownloads().collect { downloads ->
+                    items = downloads.filter { it.audioItem != null }
+                    if (items.none { it.channelKey == channel }) channel = null
+                    render()
+                }
+            }
+        }
+        render()
     }
+
+    private fun render() {
+        val query = downloadsModel.searchQuery.value.orEmpty().trim()
+        val showFolders = channel == null && query.isEmpty()
+        folderBack.isEnabled = channel != null
+        binding.channelFilter.text = items.firstOrNull { it.channelKey == channel }?.let { channelName(it) }
+        binding.channelFilter.isVisible = channel != null
+        binding.sortType.isVisible = !showFolders
+        val order = DownloadSortingOrder.entries[sortIndex]
+        binding.sortType.text = order.title.getText(requireContext())
+
+        val displayed = items.filter { item ->
+            (channel == null || item.channelKey == channel) &&
+                (item.download.title.contains(query, true) || item.download.uploader.contains(query, true))
+        }
+        val nextAdapter = if (showFolders) folderAdapter else audioAdapter
+        if (binding.downloadsRecView.adapter !== nextAdapter) binding.downloadsRecView.adapter = nextAdapter
+        if (showFolders) {
+            folderAdapter.submitList(items.groupBy { it.channelKey }.map { (key, tracks) ->
+                DownloadFolder(key, channelName(tracks.first()), tracks.size)
+            }.sortedBy { it.name.lowercase() })
+        } else {
+            audioAdapter.submitList(sortDownloads(displayed, order))
+        }
+        binding.downloadsEmpty.isVisible = displayed.isEmpty()
+        binding.deleteAll.isVisible = !showFolders && displayed.isNotEmpty()
+        binding.shuffleAll.isVisible = !showFolders && displayed.any { it.finishedAudio != null }
+        binding.resumeAll.isVisible = items.any { it.audioItem?.isFinished == false }
+    }
+
+    private fun channelName(item: DownloadWithItems) =
+        item.download.uploader.ifBlank { getString(R.string.unknown) }
 
     private fun toggleDownload(download: DownloadWithItems): Boolean {
-        val ids = download.downloadItems
-            .filter { item -> item.path.fileSize() < item.downloadSize }
-            .map { item -> item.id }
-
-        if (!serviceConnection.isBound) {
-            DownloadHelper.startDownloadService(requireContext())
-            bindDownloadService(ids.toIntArray())
+        val item = download.audioItem?.takeUnless { it.isFinished } ?: return false
+        val connected = service
+        if (connected == null) {
+            DownloadHelper.downloadAudio(requireContext(), download.download.videoId)
             return true
         }
+        return if (connected.isDownloading(item.id)) {
+            connected.pause(item.id)
+            false
+        } else {
+            connected.resume(item.id)
+            true
+        }
+    }
 
-        binder?.getService()?.let { service ->
-            val isDownloading = ids.any { id -> service.isDownloading(id) }
+    private fun updateProgress(id: Int, status: DownloadStatus) {
+        if (_binding == null || binding.downloadsRecView.adapter !== audioAdapter) return
+        val position = audioAdapter.currentList.indexOfFirst { it.audioItem?.id == id }
+        if (position < 0) return
 
-            for (id in ids) {
-                if (isDownloading) {
-                    service.pause(id)
-                } else {
-                    service.resume(id)
+        val row = binding.downloadsRecView.findViewHolderForAdapterPosition(position) as? DownloadsViewHolder
+        row?.binding?.apply {
+            when (status) {
+                DownloadStatus.Paused -> resumePauseBtn.setImageResource(R.drawable.ic_download)
+                DownloadStatus.Completed -> downloadOverlay.isGone = true
+                DownloadStatus.Stopped -> Unit
+                is DownloadStatus.Error -> resumePauseBtn.setImageResource(R.drawable.ic_restart)
+                is DownloadStatus.Progress -> {
+                    downloadOverlay.isVisible = true
+                    resumePauseBtn.setImageResource(R.drawable.ic_pause)
+                    if (!progressBar.isIndeterminate) progressBar.incrementProgressBy(status.progress.toInt())
+                    fileSize.text = progressBar.progress.formatAsFileSize()
                 }
             }
-
-            return isDownloading
         }
-        return false
-    }
-
-    private fun resumeAllDownloads() {
-        val intent = Intent(requireContext(), DownloadService::class.java)
-        intent.action = DownloadService.ACTION_RESUME_ALL
-        requireContext().startService(intent)
-
-        bindDownloadService()
-    }
-
-    private fun submitDownloadList(items: List<DownloadWithItems>) {
-        val sortOrder = DownloadSortingOrder.entries[selectedSortType]
-        var sortedItems = sortDownloadWithItemsList(items, sortOrder)
-        val query = downloadsModel.searchQuery.value
-        if (!query.isNullOrEmpty()) {
-            sortedItems = sortedItems.filter {
-                it.download.title.contains(query, ignoreCase = true)
-                        || it.download.uploader.contains(query, ignoreCase = true)
-            }
+        if (status is DownloadStatus.Completed) {
+            audioAdapter.notifyItemChanged(position)
+            render()
         }
-
-        adapter.submitList(sortedItems)
     }
 
-    private fun toggleVisibilities() {
-        val binding = _binding ?: return
-
-        val isEmpty = adapter.itemCount == 0
-        val hasIncomplete = adapter.currentList.any { download ->
-            download.downloadItems.any { !it.isFinished } &&
-                    download.downloadItems.none { activeDownloadIds.contains(it.id) }
-        }
-        binding.downloadsEmpty.isVisible = isEmpty
-        binding.downloadsContainer.isGone = isEmpty
-        binding.deleteAll.isGone = isEmpty
-        binding.resumeAll.isVisible = hasIncomplete
-        binding.shuffleAll.isGone = isEmpty
-    }
-
-    private fun showDeleteAllDialog(context: Context, adapter: DownloadsAdapter) {
-        var onlyDeleteWatchedVideos = false
-
-        MaterialAlertDialogBuilder(context)
+    private fun showDeleteAllDialog() {
+        var onlyWatched = false
+        MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.delete_all)
-            .setMultiChoiceItems(
-                arrayOf(getString(R.string.delete_only_watched_videos)),
-                null
-            ) { _, _, selected ->
-                onlyDeleteWatchedVideos = selected
+            .setMultiChoiceItems(arrayOf(getString(R.string.delete_only_watched_videos)), null) { _, _, selected ->
+                onlyWatched = selected
             }
-            .setPositiveButton(R.string.okay) { _, _ ->
-                adapter.deleteAllDownloads(onlyDeleteWatchedVideos)
-            }
+            .setPositiveButton(R.string.okay) { _, _ -> audioAdapter.deleteAllDownloads(onlyWatched) }
             .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
-    override fun onStart() {
-        if (DownloadService.IS_DOWNLOAD_RUNNING) bindDownloadService()
-
-        super.onStart()
+    fun bindDownloadService() {
+        val context = context ?: return
+        if (bound || _binding == null) return
+        bound = context.bindService(Intent(context, DownloadService::class.java), connection, 0)
     }
 
-    override fun onResume() {
-        super.onResume()
+    private fun unbindDownloadService() {
+        if (bound) requireContext().unbindService(connection)
+        bound = false
+        service = null
+        progressJob?.cancel()
+    }
 
+    override fun onStart() {
+        super.onStart()
         val filter = IntentFilter().apply {
             addAction(DownloadService.ACTION_SERVICE_STARTED)
             addAction(DownloadService.ACTION_SERVICE_STOPPED)
         }
-        ContextCompat.registerReceiver(
-            requireContext(),
-            downloadReceiver,
-            filter,
-            ContextCompat.RECEIVER_NOT_EXPORTED
-        )
-    }
-
-    /**
-     * Attach to running [DownloadService]. This should be called whenever it's possible that the service
-     * was stopped, so the connection has to be re-initiated.
-     */
-    fun bindDownloadService(ids: IntArray? = null) {
-        if (serviceConnection.isBound) return
-
-        val intent = Intent(context, DownloadService::class.java)
-        intent.putExtra("ids", ids)
-        context?.bindService(intent, serviceConnection, 0)
-    }
-
-    fun updateProgress(id: Int, status: DownloadStatus) {
-        val index = adapter.currentList.indexOfFirst {
-            it.downloadItems.any { item -> item.id == id }
-        }
-        val view =
-            _binding?.downloadsRecView?.findViewHolderForAdapterPosition(index) as? DownloadsViewHolder
-
-        if (status is DownloadStatus.Progress) activeDownloadIds.add(id)
-        else activeDownloadIds.remove(id)
-
-        view?.binding?.apply {
-            when (status) {
-                DownloadStatus.Paused -> {
-                    resumePauseBtn.setImageResource(R.drawable.ic_download)
-                }
-
-                DownloadStatus.Completed -> {
-                    downloadOverlay.isGone = true
-                }
-
-                DownloadStatus.Stopped -> Unit
-
-                is DownloadStatus.Progress -> {
-                    downloadOverlay.isVisible = true
-                    resumePauseBtn.setImageResource(R.drawable.ic_pause)
-                    if (progressBar.isIndeterminate) return
-                    progressBar.incrementProgressBy(status.progress.toInt())
-                    val progressInfo = progressBar.progress.formatAsFileSize() +
-                            " /\n" + progressBar.max.formatAsFileSize()
-                    fileSize.text = progressInfo
-                }
-
-                is DownloadStatus.Error -> {
-                    resumePauseBtn.setImageResource(R.drawable.ic_restart)
-                }
-            }
-        }
-
-        toggleVisibilities()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        context?.unregisterReceiver(downloadReceiver)
+        ContextCompat.registerReceiver(requireContext(), receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        if (DownloadService.IS_DOWNLOAD_RUNNING) bindDownloadService()
     }
 
     override fun onStop() {
+        requireContext().unregisterReceiver(receiver)
+        unbindDownloadService()
         super.onStop()
-        runCatching {
-            context?.unbindService(serviceConnection)
-        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString("channel", channel)
     }
 
     override fun onDestroyView() {
-        super.onDestroyView()
         _binding = null
+        super.onDestroyView()
     }
 
-    companion object {
-        fun sortDownloadWithItemsList(
-            items: List<DownloadWithItems>,
-            selectedSortType: DownloadSortingOrder
-        ): List<DownloadWithItems> {
-            return when (selectedSortType) {
-                DownloadSortingOrder.Oldest -> items
-                DownloadSortingOrder.Newest -> items.reversed()
-                DownloadSortingOrder.Alphabetic -> items.sortedBy { it.download.title }
-                DownloadSortingOrder.Duration -> items.sortedBy { it.download.duration }
-                DownloadSortingOrder.Channel -> items.sortedBy { it.download.uploader }
-                DownloadSortingOrder.Size -> items.sortedBy { it.downloadItems.sumOf { o -> o.downloadSize } }
-            }
-        }
-
-        // ugly HACK: should probably be refactored in the future
-        fun sortDownloadList(
-            items: List<Download>,
-            selectedSortType: DownloadSortingOrder
-        ): List<Download> {
-            return when (selectedSortType) {
-                DownloadSortingOrder.Oldest -> items
-                DownloadSortingOrder.Newest -> items.reversed()
-                DownloadSortingOrder.Alphabetic -> items.sortedBy { it.title }
-                DownloadSortingOrder.Duration -> items.sortedBy { it.duration }
-                DownloadSortingOrder.Channel -> items.sortedBy { it.uploader }
-                DownloadSortingOrder.Size -> items
-            }
-        }
+    private fun sortDownloads(items: List<DownloadWithItems>, order: DownloadSortingOrder) = when (order) {
+        DownloadSortingOrder.Oldest -> items
+        DownloadSortingOrder.Newest -> items.reversed()
+        DownloadSortingOrder.Alphabetic -> items.sortedBy { it.download.title.lowercase() }
+        DownloadSortingOrder.Duration -> items.sortedBy { it.download.duration }
+        DownloadSortingOrder.Channel -> items.sortedBy { it.download.uploader.lowercase() }
+        DownloadSortingOrder.Size -> items.sortedBy { it.audioItem?.downloadSize }
     }
 }
 
-class PlaylistDownloadsFragmentPage : Fragment(R.layout.fragment_download_content) {
-    private var selectedSortType
-        get() = PreferenceHelper.getInt(PreferenceKeys.SELECTED_DOWNLOAD_PLAYLIST_SORT_TYPE, 0)
-        set(value) {
-            PreferenceHelper.putInt(PreferenceKeys.SELECTED_DOWNLOAD_PLAYLIST_SORT_TYPE, value)
-        }
-    private val downloadsModel: DownloadsViewModel by activityViewModels()
+private data class DownloadFolder(val key: String, val name: String, val count: Int)
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        val binding = FragmentDownloadContentBinding.bind(view)
-        super.onViewCreated(view, savedInstanceState)
+private class DownloadFolderAdapter(private val open: (String) -> Unit) :
+    ListAdapter<DownloadFolder, DownloadFolderAdapter.Holder>(DiffUtilItemCallback()) {
+    class Holder(val title: TextView) : RecyclerView.ViewHolder(title)
 
-        binding.shuffleAll.isGone = true
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder = Holder(
+        LayoutInflater.from(parent.context).inflate(R.layout.download_channel_row, parent, false) as TextView
+    )
 
-        var backPressedCallback: OnBackPressedCallback? = null
-        backPressedCallback = setOnBackPressed {
-            childFragmentManager.fragments.firstOrNull()?.let {
-                childFragmentManager.commit { remove(it) }
-            }
-            backPressedCallback?.isEnabled = false
-        }
-        backPressedCallback.isEnabled = false
-
-        val adapter = DownloadPlaylistAdapter { playlist ->
-            childFragmentManager.commit {
-                replace<DownloadsFragmentPage>(
-                    binding.fragment.id,
-                    args = bundleOf(
-                        IntentData.downloadTab to DownloadTab.PLAYLIST,
-                        IntentData.playlistId to playlist.downloadPlaylist.playlistId
-                    )
-                )
-            }
-            backPressedCallback.isEnabled = true
-        }
-        binding.downloadsRecView.setOnDismissListener { position ->
-            adapter.showDeleteDialog(requireContext(), position)
-            // put the item back to the center, as it's currently out of the screen
-            adapter.restoreItem(position)
-        }
-        binding.downloadsRecView.adapter = adapter
-
-        val filterOptions = DownloadSortingOrder.entries
-        val optionTitle = filterOptions[selectedSortType].title.getText(requireContext())
-        binding.sortType.text = optionTitle
-
-        lifecycleScope.launch(Dispatchers.Main) {
-            val downloadPlaylists = withContext(Dispatchers.IO) {
-                Database.downloadDao().getDownloadPlaylists()
-            }
-
-            binding.downloadsEmpty.isVisible = downloadPlaylists.isEmpty()
-            if (downloadPlaylists.isNotEmpty()) {
-                submitPlaylists(adapter, downloadPlaylists)
-
-                binding.sortType.setOnClickListener {
-                    BaseBottomSheet().setItems(filterOptions.toList()) { index ->
-                        if (index == selectedSortType) return@setItems
-                        selectedSortType = index
-
-                        binding.sortType.text = optionTitle
-                        submitPlaylists(adapter, downloadPlaylists)
-                    }.show(childFragmentManager)
-                }
-
-                downloadsModel.searchQuery.observe(viewLifecycleOwner) {
-                    submitPlaylists(adapter, downloadPlaylists)
-                }
-
-                // the amount of visible items can change while searching, hence
-                // we have to make sure to only show the placeholder if there are currently no results
-                adapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
-                    override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) {
-                        super.onItemRangeRemoved(positionStart, itemCount)
-                        binding.downloadsEmpty.isVisible = adapter.itemCount == 0
-                        binding.downloadsRecView.isVisible = adapter.itemCount != 0
-                    }
-
-                    override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
-                        super.onItemRangeInserted(positionStart, itemCount)
-                        binding.downloadsEmpty.isVisible = adapter.itemCount == 0
-                        binding.downloadsRecView.isVisible = adapter.itemCount != 0
-                    }
-                })
-            } else {
-                binding.sortType.isGone = true
-            }
-        }
-    }
-
-    private fun submitPlaylists(
-        adapter: DownloadPlaylistAdapter,
-        playlists: List<DownloadPlaylistWithDownload>
-    ) {
-        var sorted = applySortOrder(playlists)
-        val query = downloadsModel.searchQuery.value
-        if (!query.isNullOrEmpty()) {
-            sorted = sorted.filter {
-                it.downloadPlaylist.title.contains(query, ignoreCase = true)
-            }
-        }
-
-        adapter.submitList(sorted)
-    }
-
-    fun applySortOrder(items: List<DownloadPlaylistWithDownload>): List<DownloadPlaylistWithDownload> {
-        return when (selectedSortType) {
-            0 -> items
-            else -> items.reversed()
-        }
+    override fun onBindViewHolder(holder: Holder, position: Int) {
+        val folder = getItem(position)
+        holder.title.text = holder.title.resources.getString(R.string.download_channel_count, folder.name, folder.count)
+        holder.title.setOnClickListener { open(folder.key) }
     }
 }

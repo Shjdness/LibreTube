@@ -5,7 +5,6 @@ import androidx.room.Relation
 import com.github.libretube.api.obj.Streams
 import com.github.libretube.enums.FileType
 import com.github.libretube.extensions.toMillis
-import com.github.libretube.ui.fragments.DownloadTab
 
 data class DownloadWithItems(
     @Embedded val download: Download,
@@ -18,13 +17,12 @@ data class DownloadWithItems(
         parentColumn = "videoId",
         entityColumn = "videoId"
     )
-    val downloadChapters: List<DownloadChapter> = emptyList(),
-    @Relation(
-        parentColumn = "videoId",
-        entityColumn = "videoId"
-    )
-    val downloadSponsorBlockSegments: List<DownloadSponsorBlockSegment> = emptyList()
+    val downloadChapters: List<DownloadChapter> = emptyList()
 ) {
+    val audioItem get() = downloadItems.firstOrNull { it.type == FileType.AUDIO }
+    val finishedAudio get() = downloadItems.firstOrNull { it.type == FileType.AUDIO && it.isFinished }
+    val channelKey get() = download.uploaderUrl?.takeIf { it.isNotBlank() } ?: download.uploader
+
     fun toStreams(): Streams = Streams(
         title = download.title,
         description = download.description,
@@ -42,18 +40,4 @@ data class DownloadWithItems(
         dislikes = download.dislikes,
         uploaderSubscriberCount = -1
     )
-}
-
-fun List<DownloadWithItems>.filterByTab(tab: DownloadTab) = filter { dl ->
-    when (tab) {
-        DownloadTab.AUDIO -> {
-            dl.downloadItems.any { it.type == FileType.AUDIO } && dl.downloadItems.none { it.type == FileType.VIDEO }
-        }
-
-        DownloadTab.VIDEO -> {
-            dl.downloadItems.any { it.type == FileType.VIDEO } || dl.downloadItems.isEmpty()
-        }
-
-        DownloadTab.PLAYLIST -> throw IllegalArgumentException("not applicable for playlist tab, playlistId must be passed")
-    }
 }

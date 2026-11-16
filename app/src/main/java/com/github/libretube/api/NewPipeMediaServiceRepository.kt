@@ -14,7 +14,6 @@ import com.github.libretube.api.obj.PipedStream
 import com.github.libretube.api.obj.Playlist
 import com.github.libretube.api.obj.PreviewFrames
 import com.github.libretube.api.obj.SearchResult
-import com.github.libretube.api.obj.SegmentData
 import com.github.libretube.api.obj.StreamItem
 import com.github.libretube.api.obj.StreamItem.Companion.TYPE_CHANNEL
 import com.github.libretube.api.obj.StreamItem.Companion.TYPE_PLAYLIST
@@ -323,9 +322,6 @@ class NewPipeMediaServiceRepository : MediaServiceRepository {
             uploadTimestamp = resp.uploadDate.offsetDateTime().toInstant().toKotlinInstant(),
             uploaded = resp.uploadDate.offsetDateTime().toEpochSecond() * 1000,
             thumbnailUrl = resp.thumbnails.maxBy { it.height }.url,
-            relatedStreams = resp.relatedItems
-                .filterIsInstance<StreamInfoItem>()
-                .map { item -> item.toStreamItem() },
             chapters = resp.streamSegments.map {
                 ChapterSegment(
                     title = it.title,
@@ -363,14 +359,6 @@ class NewPipeMediaServiceRepository : MediaServiceRepository {
             videoPlaybackUstreamerConfig = resp.ustreamerConfig,
         )
     }
-
-    override suspend fun getSegments(
-        videoId: String, category: List<String>, actionType: List<String>?
-    ): SegmentData = RetrofitInstance.externalApi.getSegments(
-        // use hashed video id for privacy
-        // https://wiki.sponsor.ajay.app/w/API_Docs#GET_/api/skipSegments/:sha256HashPrefix
-        videoId.sha256Sum().substring(0, 4), category, actionType
-    ).first { it.videoID == videoId }
 
     override suspend fun getDeArrowContent(videoId: String): DeArrowContent? =
         runCatching {
@@ -423,10 +411,6 @@ class NewPipeMediaServiceRepository : MediaServiceRepository {
             items = searchInfo.items.mapNotNull { it.toContentItem() },
             nextpage = searchInfo.nextPage?.toNextPageString()
         )
-    }
-
-    override suspend fun getSuggestions(query: String): List<String> {
-        return NewPipeExtractorInstance.extractor.suggestionExtractor.suggestionList(query)
     }
 
     override suspend fun getChannel(channel: ChannelIdentifier): Channel {

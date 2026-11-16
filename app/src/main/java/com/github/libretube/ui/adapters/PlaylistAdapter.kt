@@ -9,7 +9,6 @@ import androidx.recyclerview.widget.ListAdapter
 import com.github.libretube.api.obj.StreamItem
 import com.github.libretube.constants.IntentData
 import com.github.libretube.databinding.VideoRowBinding
-import com.github.libretube.db.DatabaseHolder
 import com.github.libretube.extensions.toID
 import com.github.libretube.helpers.ImageHelper
 import com.github.libretube.helpers.NavigationHelper
@@ -21,10 +20,6 @@ import com.github.libretube.ui.sheets.VideoOptionsBottomSheet
 import com.github.libretube.ui.sheets.VideoOptionsBottomSheet.Companion.VIDEO_OPTIONS_SHEET_REQUEST_KEY
 import com.github.libretube.ui.viewholders.PlaylistViewHolder
 import com.github.libretube.util.TextUtils
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 data class PlaylistItem(
     val item: StreamItem,
@@ -43,6 +38,17 @@ class PlaylistAdapter(
     areItemsTheSame = { a, b -> a.item == b.item },
     areContentsTheSame = { a, b -> a.item == b.item },
 )) {
+    private var downloadedAudioIds = emptySet<String>()
+
+    fun setDownloadedAudioIds(ids: Set<String>) {
+        val previous = downloadedAudioIds
+        downloadedAudioIds = ids
+        currentList.forEachIndexed { index, item ->
+            val id = item.item.url?.toID()
+            if ((id in previous) != (id in ids)) notifyItemChanged(index)
+        }
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PlaylistViewHolder {
         val layoutInflater = LayoutInflater.from(parent.context)
         val binding = VideoRowBinding.inflate(layoutInflater, parent, false)
@@ -96,14 +102,7 @@ class PlaylistAdapter(
 
             streamItem.duration?.let { watchProgress.setWatchProgressLength(videoId, it) }
 
-            CoroutineScope(Dispatchers.IO).launch {
-                val isDownloaded =
-                    DatabaseHolder.Database.downloadDao().exists(videoId)
-
-                withContext(Dispatchers.Main) {
-                    downloadBadge.isVisible = isDownloaded
-                }
-            }
+            downloadBadge.isVisible = videoId in downloadedAudioIds
         }
     }
 }

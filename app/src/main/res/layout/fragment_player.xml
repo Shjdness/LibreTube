@@ -151,11 +151,6 @@
                 app:drawableEndCompat="@drawable/ic_arrow_up_down"
                 app:drawableTint="?colorPrimary" />
 
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/related_rec_view"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
-
         </LinearLayout>
 
     </ScrollView>

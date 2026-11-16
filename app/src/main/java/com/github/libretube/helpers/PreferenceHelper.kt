@@ -9,7 +9,6 @@ import com.github.libretube.LibreTubeApp
 import com.github.libretube.R
 import com.github.libretube.api.TrendingCategory
 import com.github.libretube.constants.PreferenceKeys
-import com.github.libretube.enums.SbSkipOptions
 import com.github.libretube.helpers.LocaleHelper.getDetectedCountry
 import kotlin.math.roundToInt
 
@@ -34,7 +33,7 @@ object PreferenceHelper {
     private lateinit var authSettings: SharedPreferences
 
     /**
-     * Possible chars to use for the SB User ID
+     * Possible chars to use for the DeArrow user ID
      */
     private const val USER_ID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
 
@@ -43,17 +42,7 @@ object PreferenceHelper {
      * The version is automatically determined from the number of migrations available.
      */
     private val MIGRATIONS = arrayOf(
-        PreferenceMigration(0, 1) {
-            LibreTubeApp.instance.resources
-                .getStringArray(R.array.sponsorBlockSegments)
-                .forEach { category ->
-                    val key = "${category}_category"
-                    val stored = getString(key, "visible")
-                    if (stored == "visible") {
-                        putString(key, SbSkipOptions.MANUAL.name.lowercase())
-                    }
-                }
-        },
+        PreferenceMigration(0, 1) {},
         PreferenceMigration(1, 2) {
             // select a random category as the new value
             putString(PreferenceKeys.TRENDING_CATEGORY, TrendingCategory.LIVE.name)
@@ -328,12 +317,12 @@ object PreferenceHelper {
         }
     }
 
-    fun getSponsorBlockUserID(): String {
-        var uuid = getString(PreferenceKeys.SB_USER_ID, "")
+    fun getDeArrowUserId(): String {
+        var uuid = getString(PreferenceKeys.DEARROW_USER_ID, "")
         if (uuid.isEmpty()) {
-            // generate a new user id to use for submitting SponsorBlock segments
+            // generate a new user id to use for submitting DeArrow edits
             uuid = (0 until 30).map { USER_ID_CHARS.random() }.joinToString("")
-            putString(PreferenceKeys.SB_USER_ID, uuid)
+            putString(PreferenceKeys.DEARROW_USER_ID, uuid)
         }
         return uuid
     }

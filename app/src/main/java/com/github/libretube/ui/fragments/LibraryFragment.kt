@@ -28,6 +28,9 @@ import com.github.libretube.extensions.ceilHalf
 import com.github.libretube.extensions.dpToPx
 import com.github.libretube.extensions.toastFromMainDispatcher
 import com.github.libretube.helpers.NavBarHelper
+import com.github.libretube.helpers.NetworkHelper
+import com.github.libretube.repo.LocalUserDataRepository
+import kotlin.coroutines.cancellation.CancellationException
 import com.github.libretube.helpers.PreferenceHelper
 import com.github.libretube.repo.UserDataRepositoryHelper
 import com.github.libretube.ui.adapters.PlaylistBookmarkAdapter
@@ -155,7 +158,9 @@ class LibraryFragment : DynamicLayoutManagerFragment(R.layout.fragment_library) 
         lifecycleScope.launch {
             val bookmarks = try {
                 withContext(Dispatchers.IO) {
-                    UserDataRepositoryHelper.userDataRepository.getPlaylistBookmarks()
+                    if (NetworkHelper.isNetworkAvailable(requireContext())) {
+                        UserDataRepositoryHelper.userDataRepository.getPlaylistBookmarks()
+                    } else LocalUserDataRepository().getPlaylistBookmarks()
                 }
             } catch (e: Exception) {
                 context?.toastFromMainDispatcher(e.message.orEmpty())
@@ -184,12 +189,14 @@ class LibraryFragment : DynamicLayoutManagerFragment(R.layout.fragment_library) 
             repeatOnLifecycle(Lifecycle.State.CREATED) {
                 val playlists = try {
                     withContext(Dispatchers.IO) {
-                        PlaylistsHelper.getPlaylists()
+                        if (NetworkHelper.isNetworkAvailable(requireContext())) PlaylistsHelper.getPlaylists()
+                        else PlaylistsHelper.getOfflinePlaylists()
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
-                    Log.e(TAG(), e.toString())
-                    Toast.makeText(context, R.string.unknown_error, Toast.LENGTH_SHORT).show()
-                    return@repeatOnLifecycle
+                    Log.w(TAG(), "Could not load playlists from sync server", e)
+                    withContext(Dispatchers.IO) { PlaylistsHelper.getOfflinePlaylists() }
                 }
 
                 val binding = _binding ?: return@repeatOnLifecycle

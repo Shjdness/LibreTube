@@ -68,11 +68,7 @@ class VideoOptionsBottomSheet : BaseBottomSheet() {
             }
 
             VideoBottomSheetItem.Download -> {
-                DownloadHelper.startDownloadDialog(
-                    requireContext(),
-                    parentFragmentManager,
-                    videoId
-                )
+                DownloadHelper.downloadAudio(requireContext(), videoId)
             }
 
             VideoBottomSheetItem.Share -> {

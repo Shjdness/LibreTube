@@ -21,7 +21,6 @@ import com.github.libretube.services.AbstractPlayerService
 import com.github.libretube.services.OfflinePlayerService
 import com.github.libretube.services.OnlinePlayerService
 import com.github.libretube.ui.activities.AbstractPlayerHostActivity
-import com.github.libretube.ui.activities.NoInternetActivity
 import com.github.libretube.ui.fragments.PlayerFragment
 import com.github.libretube.util.PlayingQueue
 import com.github.libretube.util.PlayingQueueMode
@@ -49,12 +48,10 @@ object BackgroundHelper {
             fragmentManager.commit { remove(it) }
         }
 
-        val noInternet = ContextHelper.tryUnwrapActivity<NoInternetActivity>(context) != null
         val service = if (playerData.isOffline) OfflinePlayerService::class.java else OnlinePlayerService::class.java
         stopBackgroundPlay(context)
         startMediaService(context, service, bundleOf(
             IntentData.playerData to playerData,
-            IntentData.noInternet to noInternet,
             IntentData.audioOnly to true
         ))
     }

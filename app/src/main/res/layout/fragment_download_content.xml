@@ -46,18 +46,16 @@
 
         </RelativeLayout>
 
-        <TextView
-            android:id="@+id/playlist_name"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/channel_filter"
+            style="?materialButtonTonalStyle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:maxLines="1"
-            android:textSize="18sp"
-            android:textStyle="bold"
+            android:layout_marginHorizontal="8dp"
             android:ellipsize="end"
-            android:paddingHorizontal="8dp"
+            android:maxLines="1"
             android:visibility="gone"
-            tools:visibility="visible"
-            tools:text="Downloaded Playlist Name"/>
+            app:icon="@drawable/ic_download_folder" />
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/downloads_recView"
@@ -124,10 +122,5 @@
         app:layout_constraintEnd_toEndOf="parent"
         tools:targetApi="o"
         tools:visibility="visible" />
-
-    <androidx.fragment.app.FragmentContainerView
-        android:id="@+id/fragment"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

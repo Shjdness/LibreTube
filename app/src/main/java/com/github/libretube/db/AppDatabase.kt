@@ -20,7 +20,6 @@ import com.github.libretube.db.obj.DownloadChapter
 import com.github.libretube.db.obj.DownloadItem
 import com.github.libretube.db.obj.DownloadPlaylist
 import com.github.libretube.db.obj.DownloadPlaylistVideosCrossRef
-import com.github.libretube.db.obj.DownloadSponsorBlockSegment
 import com.github.libretube.db.obj.LocalPlaylist
 import com.github.libretube.db.obj.LocalPlaylistItem
 import com.github.libretube.db.obj.LocalSubscription
@@ -44,13 +43,12 @@ import com.github.libretube.db.obj.WatchPosition
         Download::class,
         DownloadItem::class,
         DownloadChapter::class,
-        DownloadSponsorBlockSegment::class,
         DownloadPlaylist::class,
         DownloadPlaylistVideosCrossRef::class,
         SubscriptionGroup::class,
         SubscriptionsFeedItem::class
     ],
-    version = 25,
+    version = 26,
     autoMigrations = [
         AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9),
@@ -62,6 +60,7 @@ import com.github.libretube.db.obj.WatchPosition
         AutoMigration(from = 20, to = 21),
         AutoMigration(from = 23, to = 24, spec = DatabaseHolder.MIGRATION_23_24::class),
         AutoMigration(from = 24, to = 25),
+        AutoMigration(from = 25, to = 26, spec = DatabaseHolder.MIGRATION_25_26::class),
     ]
 )
 @TypeConverters(Converters::class)

@@ -58,20 +58,10 @@ class SearchSuggestionsFragment : Fragment(R.layout.fragment_search_suggestions)
 
         lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                launch {
-                    viewModel.searchSuggestions.collectLatest { result ->
-                        suggestionsAdapter.submitSearchSuggestions(
-                            result.historyList,
-                            result.suggestionList
-                        ) {
-                            binding.suggestionsRecycler.scrollToPosition(0)
-                        }
-                    }
-                }
-
-                launch {
-                    viewModel.shouldShowEmptyHistoryMessage.collectLatest {
-                        toggleEmptyHistoryMessageVisibility(it)
+                viewModel.filteredSearchHistory.collectLatest { history ->
+                    toggleEmptyHistoryMessageVisibility(history.isEmpty())
+                    suggestionsAdapter.submitList(history) {
+                        binding.suggestionsRecycler.scrollToPosition(0)
                     }
                 }
             }
