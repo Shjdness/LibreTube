@@ -1,9 +1,6 @@
 package com.github.libretube.api
 
 import com.github.libretube.BuildConfig
-import com.github.libretube.api.ltsync.LibreTubeSyncServerApi
-import com.github.libretube.constants.PreferenceKeys
-import com.github.libretube.helpers.PreferenceHelper
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -15,37 +12,8 @@ typealias HeadersAccessor = () -> Map<String, String>
 
 object RetrofitInstance {
     const val PIPED_API_URL = "https://pipedapi.kavin.rocks"
-    private const val LIBRETUBE_SYNC_SERVER_URL = "https://sync.libretube.dev"
-
-    val pipedAuthUrl
-        get() = PreferenceHelper.getString(
-            PreferenceKeys.AUTH_INSTANCE,
-            PIPED_API_URL
-        )
-
-    val libretubeSyncServerUrl
-        get() = PreferenceHelper.getString(
-            PreferenceKeys.LIBRETUBE_SYNC_SERVER_URL,
-            LIBRETUBE_SYNC_SERVER_URL
-        )
-
-    val apiLazyMgr = resettableManager()
     val kotlinxConverterFactory = JsonHelper.json
         .asConverterFactory("application/json".toMediaType())
-
-    val pipedAuthApi by resettableLazy(apiLazyMgr) {
-        buildRetrofitInstance<PipedAuthApi>(
-            pipedAuthUrl,
-            headersAccessor = { mapOf("Authorization" to PreferenceHelper.getToken()) }
-        )
-    }
-
-    val libretubeSyncServerApi by resettableLazy(apiLazyMgr) {
-        buildRetrofitInstance<LibreTubeSyncServerApi>(
-            libretubeSyncServerUrl,
-            headersAccessor = { mapOf("Authorization" to PreferenceHelper.getToken()) }
-        )
-    }
 
     // the url provided here isn't actually used anywhere in the external api
     val externalApi = buildRetrofitInstance<ExternalApi>(PIPED_API_URL)

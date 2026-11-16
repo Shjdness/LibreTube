@@ -38,27 +38,8 @@
 
         <activity
             android:name=".ui.activities.SettingsActivity"
-            android:exported="true"
+            android:exported="false"
             android:launchMode="singleTop"
-            android:label="@string/settings"
-            android:screenOrientation="locked">
-
-            <!-- OIDC callbacks -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data android:scheme="${applicationId}" />
-                <data android:host="login_callback" />
-                <data android:host="delete_callback" />
-            </intent-filter>
-
-        </activity>
-
-        <activity
-            android:name=".ui.activities.WelcomeActivity"
             android:label="@string/settings"
             android:screenOrientation="locked" />
 
@@ -119,7 +100,6 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:screenOrientation="locked"
-            android:supportsPictureInPicture="true"
             android:theme="@style/SplashScreenTheme"
             android:windowSoftInputMode="adjustPan">
             <!-- allow being recognized as a music player -->
@@ -136,7 +116,6 @@
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round"
-            android:supportsPictureInPicture="true"
             android:targetActivity=".ui.activities.MainActivity"
             android:theme="@style/SplashScreenTheme"
             android:windowSoftInputMode="adjustPan">
@@ -155,7 +134,6 @@
             android:exported="true"
             android:icon="@mipmap/ic_gradient"
             android:roundIcon="@mipmap/ic_gradient_round"
-            android:supportsPictureInPicture="true"
             android:targetActivity=".ui.activities.MainActivity"
             android:theme="@style/SplashScreenTheme"
             android:windowSoftInputMode="adjustPan">
@@ -175,7 +153,6 @@
             android:exported="true"
             android:icon="@mipmap/ic_launcher_light"
             android:roundIcon="@mipmap/ic_launcher_light_round"
-            android:supportsPictureInPicture="true"
             android:targetActivity=".ui.activities.MainActivity"
             android:theme="@style/SplashScreenTheme"
             android:windowSoftInputMode="adjustPan">
@@ -195,7 +172,6 @@
             android:exported="true"
             android:icon="@mipmap/ic_fire"
             android:roundIcon="@mipmap/ic_fire_round"
-            android:supportsPictureInPicture="true"
             android:targetActivity=".ui.activities.MainActivity"
             android:theme="@style/SplashScreenTheme"
             android:windowSoftInputMode="adjustPan">
@@ -215,7 +191,6 @@
             android:exported="true"
             android:icon="@mipmap/ic_flame"
             android:roundIcon="@mipmap/ic_flame_round"
-            android:supportsPictureInPicture="true"
             android:targetActivity=".ui.activities.MainActivity"
             android:theme="@style/SplashScreenTheme"
             android:windowSoftInputMode="adjustPan">
@@ -235,7 +210,6 @@
             android:exported="true"
             android:icon="@mipmap/ic_shaped"
             android:roundIcon="@mipmap/ic_shaped_round"
-            android:supportsPictureInPicture="true"
             android:targetActivity=".ui.activities.MainActivity"
             android:theme="@style/SplashScreenTheme"
             android:windowSoftInputMode="adjustPan">
@@ -253,7 +227,6 @@
             android:exported="true"
             android:icon="@mipmap/ic_torch"
             android:roundIcon="@mipmap/ic_torch_round"
-            android:supportsPictureInPicture="true"
             android:targetActivity=".ui.activities.MainActivity"
             android:theme="@style/SplashScreenTheme"
             android:windowSoftInputMode="adjustPan">
@@ -273,7 +246,6 @@
             android:exported="true"
             android:icon="@mipmap/ic_legacy"
             android:roundIcon="@mipmap/ic_legacy_round"
-            android:supportsPictureInPicture="true"
             android:targetActivity=".ui.activities.MainActivity"
             android:theme="@style/SplashScreenTheme"
             android:windowSoftInputMode="adjustPan">
@@ -293,7 +265,6 @@
             android:exported="true"
             android:icon="@mipmap/ic_bird"
             android:roundIcon="@mipmap/ic_bird_round"
-            android:supportsPictureInPicture="true"
             android:targetActivity=".ui.activities.MainActivity"
             android:theme="@style/SplashScreenTheme"
             android:windowSoftInputMode="adjustPan">
@@ -396,7 +367,7 @@
             android:foregroundServiceType="dataSync" />
 
         <service
-            android:name=".services.OnlinePlayerService"
+            android:name=".services.AudioPlaybackService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback">
@@ -406,23 +377,6 @@
             </intent-filter>
 
         </service>
-
-        <service
-            android:name=".services.OfflinePlayerService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="mediaPlayback">
-
-            <intent-filter>
-                <action android:name="androidx.media3.session.MediaSessionService" />
-            </intent-filter>
-
-        </service>
-
-        <service
-            android:name=".services.OnClearFromRecentService"
-            android:enabled="true"
-            android:exported="false" />
 
         <receiver
             android:name=".receivers.NotificationReceiver"

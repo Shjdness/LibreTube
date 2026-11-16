@@ -1,6 +1,9 @@
 package com.github.libretube.repo
 
+import androidx.room.withTransaction
 import com.github.libretube.api.obj.Playlist
+import com.github.libretube.constants.PreferenceKeys
+import com.github.libretube.helpers.PreferenceHelper
 import com.github.libretube.api.obj.Playlists
 import com.github.libretube.api.obj.StreamItem
 import com.github.libretube.api.obj.Subscription
@@ -15,8 +18,6 @@ import com.github.libretube.db.obj.WatchPosition
 import com.github.libretube.enums.WatchHistoryStatus
 
 class LocalUserDataRepository : UserDataRepository {
-    override var requiresLogin: Boolean = false
-
     private val WATCH_HISTORY_PAGE_SIZE = 30
 
     override suspend fun getPlaylist(playlistId: String): Playlist {
@@ -33,16 +34,44 @@ class LocalUserDataRepository : UserDataRepository {
     }
 
     override suspend fun getPlaylists(): List<Playlists> {
-        return Database.localPlaylistsDao().getAll()
-            .map {
-                Playlists(
-                    id = it.playlist.id.toString(),
-                    name = it.playlist.name,
-                    shortDescription = it.playlist.description,
-                    thumbnail = it.playlist.thumbnailUrl,
-                    videos = it.videos.size.toLong()
-                )
+        recoverCachedSyncedPlaylists()
+        return Database.localPlaylistsDao().getAll().map { relation ->
+            Playlists(
+                id = relation.playlist.id.toString(),
+                name = relation.playlist.name,
+                shortDescription = relation.playlist.description,
+                thumbnail = relation.playlist.thumbnailUrl,
+                videos = relation.videos.size.toLong()
+            )
+        }
+    }
+
+
+    // Older sync builds cached downloaded remote playlists. Copy those entries into
+    // the local library in one transaction so an interrupted upgrade can safely retry.
+    private suspend fun recoverCachedSyncedPlaylists() {
+        val legacy = PreferenceHelper.getString(PreferenceKeys.SYNC_SERVER_TYPE, "none")
+        if (legacy != "piped" && legacy != "libretube") return
+        Database.withTransaction {
+            val playlists = Database.localPlaylistsDao()
+            val existing = playlists.getAll().toMutableList()
+            val downloads = Database.downloadDao()
+            for (cached in downloads.getDownloadPlaylists()) {
+                val remoteId = cached.downloadPlaylist.playlistId
+                if (!REMOTE_PLAYLIST_ID.matches(remoteId) || cached.downloadVideos.isEmpty()) continue
+                val title = cached.downloadPlaylist.title.ifBlank { remoteId }
+                val tracks = cached.downloadVideos
+                val ids = tracks.map { it.videoId }
+                if (existing.any { it.playlist.name == title && it.videos.map { item -> item.videoId }.containsAll(ids) }) continue
+                val inserted = playlists.createPlaylist(LocalPlaylist(name = title,
+                    description = cached.downloadPlaylist.description)).toInt()
+                val items = tracks.map { it.toStreamItem().toLocalPlaylistItem(inserted.toString()) }
+                items.forEach { playlists.addPlaylistVideo(it) }
+                existing.add(com.github.libretube.db.obj.LocalPlaylistWithVideos(
+                    LocalPlaylist(id = inserted, name = title, description = cached.downloadPlaylist.description), items))
             }
+        }
+        PreferenceHelper.putString(PreferenceKeys.SYNC_SERVER_TYPE, "none")
     }
 
     override suspend fun addToPlaylist(playlistId: String, vararg videos: StreamItem): Boolean {
@@ -96,18 +125,9 @@ class LocalUserDataRepository : UserDataRepository {
     }
 
     override suspend fun removeFromPlaylist(playlistId: String, videoId: String, index: Int): Boolean {
-        val transaction = Database.localPlaylistsDao().getAll()
-            .first { it.playlist.id.toString() == playlistId }
-        Database.localPlaylistsDao().removePlaylistVideo(
-            transaction.videos[index]
-        )
-        // set a new playlist thumbnail if the first video got removed
-        if (index == 0) {
-            transaction.playlist.thumbnailUrl =
-                transaction.videos.getOrNull(1)?.thumbnailUrl.orEmpty()
-        }
-        Database.localPlaylistsDao().updatePlaylist(transaction.playlist)
-
+        val dao = Database.localPlaylistsDao()
+        val item = dao.getPlaylistVideo(playlistId, videoId) ?: return false
+        dao.removePlaylistVideo(item)
         return true
     }
 
@@ -194,6 +214,9 @@ class LocalUserDataRepository : UserDataRepository {
         // delete the old version of the group first before updating it, as the name is the
         // primary key
         Database.subscriptionGroupsDao().deleteGroup(subscriptionGroupId)
+        if (PreferenceHelper.getString(PreferenceKeys.SELECTED_CHANNEL_GROUP_KEY, "") == "group:" + subscriptionGroupId) {
+            PreferenceHelper.putString(PreferenceKeys.SELECTED_CHANNEL_GROUP_KEY, "group:" + newName)
+        }
         Database.subscriptionGroupsDao().createGroup(updatedGroup)
     }
 
@@ -291,6 +314,8 @@ class LocalUserDataRepository : UserDataRepository {
     }
 
     companion object {
+        private val REMOTE_PLAYLIST_ID = Regex("[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}")
+
         // can only mark as watched if less than 60s remaining
         const val ABSOLUTE_WATCHED_THRESHOLD = 60.0f
 

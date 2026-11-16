@@ -28,11 +28,6 @@ object PreferenceHelper {
     lateinit var settings: SharedPreferences
 
     /**
-     * For sensitive data (like token)
-     */
-    private lateinit var authSettings: SharedPreferences
-
-    /**
      * Possible chars to use for the DeArrow user ID
      */
     private const val USER_ID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
@@ -139,8 +134,6 @@ object PreferenceHelper {
             remove("local_stream_extraction")
             remove("full_local_mode")
 
-            val usesPipedAuth = getBoolean("auth_instance_toggle", false)
-            if (usesPipedAuth) putString(PreferenceKeys.SYNC_SERVER_TYPE, "piped")
             remove("auth_instance_toggle")
 
             remove("local_feed_extraction") // local feed extraction is default now unless Piped is used
@@ -178,7 +171,6 @@ object PreferenceHelper {
      */
     fun initialize(context: Context) {
         settings = getDefaultSharedPreferences(context)
-        authSettings = getAuthenticationPreferences(context)
     }
 
     /**
@@ -250,22 +242,6 @@ object PreferenceHelper {
 
     fun clearPreferences() {
         settings.edit { clear() }
-    }
-
-    fun getToken(): String {
-        return authSettings.getString(PreferenceKeys.TOKEN, "")!!
-    }
-
-    fun setToken(newValue: String) {
-        authSettings.edit { putString(PreferenceKeys.TOKEN, newValue) }
-    }
-
-    fun getUsername(): String {
-        return authSettings.getString(PreferenceKeys.USERNAME, "")!!
-    }
-
-    fun setUsername(newValue: String) {
-        authSettings.edit { putString(PreferenceKeys.USERNAME, newValue) }
     }
 
     fun updateLastFeedWatchedTime(time: Long, seenByUser: Boolean) {
@@ -342,7 +318,4 @@ object PreferenceHelper {
         return PreferenceManager.getDefaultSharedPreferences(context)
     }
 
-    private fun getAuthenticationPreferences(context: Context): SharedPreferences {
-        return context.getSharedPreferences(PreferenceKeys.AUTH_PREF_FILE, Context.MODE_PRIVATE)
-    }
 }

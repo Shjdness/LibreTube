@@ -7,6 +7,7 @@ import com.github.libretube.api.obj.StreamItem
 import com.github.libretube.extensions.toMillis
 import kotlinx.datetime.LocalDate
 import java.nio.file.Path
+import kotlin.io.path.isRegularFile
 
 @Entity(tableName = "download")
 data class Download(
@@ -28,7 +29,7 @@ data class Download(
         url = videoId,
         title = title,
         shortDescription = description,
-        thumbnail = thumbnailPath?.toUri()?.toString(),
+        thumbnail = thumbnailPath?.takeIf { it.isRegularFile() }?.toUri()?.toString(),
         duration = duration,
         uploaded = uploadDate?.toMillis() ?: 0L,
         uploadedDate = uploadDate?.toString(),

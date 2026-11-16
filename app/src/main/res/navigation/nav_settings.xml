@@ -12,7 +12,7 @@
     <fragment
         android:id="@+id/dataManagementSettings"
         android:name="com.github.libretube.ui.preferences.DataManagementSettings"
-        android:label="@string/account" />
+        android:label="@string/history" />
 
     <fragment
         android:id="@+id/generalSettings"
@@ -26,7 +26,7 @@
     <fragment
         android:id="@+id/audioVideoSettings"
         android:name="com.github.libretube.ui.preferences.AudioVideoSettings"
-        android:label="@string/audio_video" />
+        android:label="@string/playerAudioQuality" />
     <fragment
         android:id="@+id/backupRestoreSettings"
         android:name="com.github.libretube.ui.preferences.BackupRestoreSettings"

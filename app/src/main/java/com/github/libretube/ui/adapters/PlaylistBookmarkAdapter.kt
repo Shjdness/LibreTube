@@ -11,7 +11,6 @@ import com.github.libretube.constants.IntentData
 import com.github.libretube.databinding.PlaylistsRowBinding
 import com.github.libretube.db.obj.PlaylistBookmark
 import com.github.libretube.enums.PlaylistType
-import com.github.libretube.helpers.ImageHelper
 import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.repo.UserDataRepositoryHelper
 import com.github.libretube.ui.adapters.callbacks.DiffUtilItemCallback
@@ -53,9 +52,9 @@ class PlaylistBookmarkAdapter: ListAdapter<PlaylistBookmark, PlaylistBookmarkVie
         with(holder.binding) {
             var isBookmarked = true
 
-            ImageHelper.loadImage(bookmark.thumbnailUrl, playlistThumbnail)
             playlistTitle.text = bookmark.playlistName
             playlistDescription.text = bookmark.uploader
+            playlistDescription.isVisible = !bookmark.uploader.isNullOrBlank()
             videoCount.text = bookmark.videos.toString()
 
             bookmarkPlaylist.setOnClickListener {
@@ -83,6 +82,7 @@ class PlaylistBookmarkAdapter: ListAdapter<PlaylistBookmark, PlaylistBookmarkVie
                 )
             }
 
+            playlistMenu.setOnClickListener { showPlaylistOptions(root.context, bookmark) }
             root.setOnLongClickListener {
                 showPlaylistOptions(root.context, bookmark)
                 true

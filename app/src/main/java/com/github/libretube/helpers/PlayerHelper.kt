@@ -1,47 +1,28 @@
 package com.github.libretube.helpers
 
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ActivityInfo
-import android.content.res.Resources
 import android.net.Uri
-import android.os.Looper
 import android.util.Base64
 import android.util.Log
-import android.view.accessibility.CaptioningManager
-import androidx.annotation.DrawableRes
 import androidx.annotation.OptIn
-import androidx.annotation.StringRes
-import androidx.core.app.PendingIntentCompat
-import androidx.core.app.RemoteActionCompat
 import androidx.core.content.getSystemService
-import androidx.core.content.res.ResourcesCompat
-import androidx.core.graphics.drawable.IconCompat
-import androidx.core.graphics.drawable.toBitmap
 import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
-import androidx.media3.common.Format
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.LoadControl
-import androidx.media3.exoplayer.Renderer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.text.TextOutput
-import androidx.media3.exoplayer.text.TextRenderer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import androidx.media3.ui.CaptionStyleCompat
 import com.github.libretube.LibreTubeApp
 import com.github.libretube.R
 import com.github.libretube.api.obj.ChapterSegment
 import com.github.libretube.api.obj.Streams
-import com.github.libretube.api.obj.Subtitle
 import com.github.libretube.api.obj.WatchHistoryEntryMetadata
 import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.db.DatabaseHelper
@@ -50,9 +31,7 @@ import com.github.libretube.enums.menuoption.RepeatModeBottomSheetItem
 import com.github.libretube.extensions.TAG
 import com.github.libretube.extensions.seekBy
 import com.github.libretube.extensions.togglePlayPauseState
-import com.github.libretube.obj.VideoStats
 import com.github.libretube.repo.UserDataRepositoryHelper
-import com.github.libretube.util.TextUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -64,98 +43,25 @@ import kotlin.time.Clock
 object PlayerHelper {
     private const val ACTION_MEDIA_CONTROL = "media_control"
     const val CONTROL_TYPE = "control_type"
-    const val ROLE_FLAG_AUTO_GEN_SUBTITLE = C.ROLE_FLAG_SUPPLEMENTARY
-    private const val MINIMUM_BUFFER_DURATION = 1000 * 10 // exo default is 50s
-
-    /**
-     * Playback speed while the fast forward action is active (triggered by a long press on the player)
-     *
-     * Should be kept in sync with `fast_forward_view.xml`
-     */
-    const val FAST_FORWARD_SPEED_FACTOR = 2f
+    private const val MINIMUM_BUFFER_DURATION = 1000 * 10
 
     /**
      * Maximum playback speed supported by ExoPlayer
      */
     const val MAXIMUM_PLAYBACK_SPEED = 8f
 
-    /**
-     * The maximum amount of time to wait until the video starts playing: 10 minutes
-     */
-    const val MAX_BUFFER_DELAY = 10 * 60 * 1000L
-
     val repeatModes: List<RepeatModeBottomSheetItem> = RepeatModeBottomSheetItem.entries
 
     /**
      * Create a base64 encoded DASH stream manifest
      */
-    fun createDashSource(streams: Streams, context: Context): Uri {
-        val manifest = DashHelper.createManifest(
-            streams,
-            DisplayHelper.supportsHdr(context)
-        )
+    fun createDashSource(streams: Streams): Uri {
+        val manifest = DashHelper.createManifest(streams)
 
         // encode to base64
         val encoded = Base64.encodeToString(manifest.toByteArray(), Base64.DEFAULT)
         return "data:application/dash+xml;charset=utf-8;base64,$encoded".toUri()
     }
-
-    /**
-     * Get the system's default captions style
-     */
-    @OptIn(androidx.media3.common.util.UnstableApi::class)
-    fun getCaptionStyle(context: Context): CaptionStyleCompat {
-        val captioningManager = context.getSystemService<CaptioningManager>()!!
-        return if (!captioningManager.isEnabled) {
-            // system captions are disabled, using android default captions style
-            CaptionStyleCompat.DEFAULT
-        } else {
-            // system captions are enabled
-            CaptionStyleCompat.createFromCaptionStyle(captioningManager.userStyle)
-        }
-    }
-
-    fun getFullscreenOrientation(isVerticalVideo: Boolean): Int {
-        val fullscreenOrientationPref = PreferenceHelper.getString(
-            PreferenceKeys.FULLSCREEN_ORIENTATION,
-            "ratio"
-        )
-
-        return when (fullscreenOrientationPref) {
-            "ratio" -> {
-                // probably a youtube shorts video
-                if (isVerticalVideo) {
-                    ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
-                } // a video with normal aspect ratio
-                else {
-                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                }
-            }
-
-            "auto" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
-            "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            "portrait" -> ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
-            else -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        }
-    }
-
-    val autoFullscreenEnabled: Boolean
-        get() = PreferenceHelper.getBoolean(
-            PreferenceKeys.AUTO_FULLSCREEN,
-            false
-        )
-
-    val autoFullscreenShortsEnabled: Boolean
-        get() = PreferenceHelper.getBoolean(
-            PreferenceKeys.AUTO_FULLSCREEN_SHORTS,
-            false
-        )
-
-    val pausePlayerOnScreenOffEnabled: Boolean
-        get() = PreferenceHelper.getBoolean(
-            PreferenceKeys.PAUSE_ON_SCREEN_OFF,
-            false
-        )
 
     private val watchPositionsPref: String
         get() = PreferenceHelper.getString(
@@ -163,14 +69,11 @@ object PlayerHelper {
             "always"
         )
 
-    val watchPositionsVideo: Boolean
-        get() = watchPositionsPref in listOf("always", "videos")
-
     val watchPositionsAudio: Boolean
         get() = watchPositionsPref in listOf("always", "audio")
 
     val watchPositionsAny: Boolean
-        get() = watchPositionsVideo || watchPositionsAudio
+        get() = watchPositionsAudio
 
     val watchHistoryEnabled: Boolean
         get() = PreferenceHelper.getBoolean(
@@ -178,38 +81,11 @@ object PlayerHelper {
             true
         )
 
-    val useSystemCaptionStyle: Boolean
-        get() = PreferenceHelper.getBoolean(
-            PreferenceKeys.SYSTEM_CAPTION_STYLE,
-            true
-        )
-
-    val useRichCaptionRendering: Boolean
-        get() = PreferenceHelper.getBoolean(
-            PreferenceKeys.RICH_CAPTION_RENDERING,
-            false
-        )
-
     private val bufferingGoal: Int
         get() = PreferenceHelper.getString(
             PreferenceKeys.BUFFERING_GOAL,
             "50"
         ).toInt() * 1000
-
-    val defaultSubtitleCode: String?
-        get() {
-            val code = PreferenceHelper.getString(
-                PreferenceKeys.DEFAULT_SUBTITLE,
-                ""
-            )
-
-            if (code == "") return null
-
-            if (code.contains("-")) {
-                return code.split("-")[0]
-            }
-            return code
-        }
 
     var autoPlayEnabled: Boolean
         get() = PreferenceHelper.getBoolean(
@@ -219,12 +95,6 @@ object PlayerHelper {
         set(value) {
             PreferenceHelper.putBoolean(PreferenceKeys.AUTOPLAY, value)
         }
-
-    val autoPlayCountdown: Boolean
-        get() = PreferenceHelper.getBoolean(
-            PreferenceKeys.AUTOPLAY_COUNTDOWN,
-            false
-        )
 
     val seekIncrement: Long
         get() = PreferenceHelper.getString(
@@ -244,42 +114,6 @@ object PlayerHelper {
         get() = PreferenceHelper.getBoolean(
             PreferenceKeys.PLAYER_SWIPE_CONTROLS,
             true
-        )
-
-    val fullscreenGesturesEnabled: Boolean
-        get() = PreferenceHelper.getBoolean(
-            PreferenceKeys.FULLSCREEN_GESTURES,
-            false
-        )
-
-    val pinchGestureEnabled: Boolean
-        get() = PreferenceHelper.getBoolean(
-            PreferenceKeys.PLAYER_PINCH_CONTROL,
-            true
-        )
-
-    val captionsTextSize: Float
-        get() = PreferenceHelper.getString(
-            PreferenceKeys.CAPTIONS_SIZE,
-            "18"
-        ).toFloat()
-
-    val doubleTapToSeek: Boolean
-        get() = PreferenceHelper.getBoolean(
-            PreferenceKeys.DOUBLE_TAP_TO_SEEK,
-            true
-        )
-
-    val longPressFastForward: Boolean
-        get() = PreferenceHelper.getBoolean(
-            PreferenceKeys.LONG_PRESS_FAST_FORWARD,
-            false
-        )
-
-    private val alternativePiPControls: Boolean
-        get() = PreferenceHelper.getBoolean(
-            PreferenceKeys.ALTERNATIVE_PIP_CONTROLS,
-            false
         )
 
     private val skipSilence: Boolean
@@ -306,108 +140,8 @@ object PlayerHelper {
             PreferenceHelper.putInt(PreferenceKeys.REPEAT_MODE, value)
         }
 
-    fun getDefaultResolution(context: Context, isFullscreen: Boolean): Int? {
-        var prefKey = if (NetworkHelper.isNetworkMetered(context)) {
-            PreferenceKeys.DEFAULT_RESOLUTION_MOBILE
-        } else {
-            PreferenceKeys.DEFAULT_RESOLUTION
-        }
-        if (!isFullscreen) prefKey += "_no_fullscreen"
-
-        return PreferenceHelper.getString(prefKey, "")
-            .replace("p", "")
-            .toIntOrNull()
-    }
-
     fun getIntentActionName(context: Context): String {
         return context.packageName + "." + ACTION_MEDIA_CONTROL
-    }
-
-    private fun getRemoteAction(
-        activity: Activity,
-        icon: IconCompat,
-        @StringRes title: Int,
-        event: PlayerEvent
-    ): RemoteActionCompat {
-        val intent = Intent(getIntentActionName(activity))
-            .setPackage(activity.packageName)
-            .putExtra(CONTROL_TYPE, event)
-        val pendingIntent =
-            PendingIntentCompat.getBroadcast(activity, event.ordinal, intent, 0, false)!!
-
-        val text = activity.getString(title)
-        return RemoteActionCompat(icon, text, text, pendingIntent)
-    }
-
-    private fun seekIconWithSpeed(resources: Resources, @DrawableRes resourceId: Int): IconCompat {
-        val textSize = 15 * resources.displayMetrics.density
-        val bitmap = ResourcesCompat.getDrawable(resources, resourceId, null)!!.toBitmap()
-        ImageHelper.insertText(bitmap, seekIncrement.div(1000).toString(), 0.5f, 0.65f, textSize)
-        return IconCompat.createWithBitmap(bitmap)
-    }
-
-    /**
-     * Create controls to use in the PiP window
-     */
-    fun getPiPModeActions(activity: Activity, isPlaying: Boolean): List<RemoteActionCompat> {
-        val audioModeAction = getRemoteAction(
-            activity,
-            IconCompat.createWithResource(activity, R.drawable.ic_headphones),
-            R.string.background_mode,
-            PlayerEvent.Background
-        )
-
-
-        val rewindAction = getRemoteAction(
-            activity,
-            seekIconWithSpeed(activity.resources, R.drawable.ic_rewind),
-            R.string.rewind,
-            PlayerEvent.Rewind
-        )
-
-        val playPauseAction = getRemoteAction(
-            activity,
-            IconCompat.createWithResource(activity, if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
-            if (isPlaying) R.string.resume else R.string.pause,
-            PlayerEvent.PlayPause
-        )
-
-        val skipNextAction = getRemoteAction(
-            activity,
-            IconCompat.createWithResource(activity, R.drawable.ic_next),
-            R.string.play_next,
-            PlayerEvent.Next
-        )
-
-        val forwardAction = getRemoteAction(
-            activity,
-            seekIconWithSpeed(activity.resources, R.drawable.ic_forward),
-            R.string.forward,
-            PlayerEvent.Forward
-        )
-        return if (alternativePiPControls) {
-            listOf(audioModeAction, playPauseAction, skipNextAction)
-        } else {
-            listOf(rewindAction, playPauseAction, forwardAction)
-        }
-    }
-
-    @OptIn(androidx.media3.common.util.UnstableApi::class)
-    private fun createRendererFactory(context: Context): DefaultRenderersFactory {
-        val renderersFactory = object : DefaultRenderersFactory(context) {
-            override fun buildTextRenderers(
-                context: Context,
-                output: TextOutput,
-                outputLooper: Looper,
-                extensionRendererMode: Int,
-                out: ArrayList<Renderer>
-            ) {
-                super.buildTextRenderers(context, output, outputLooper, extensionRendererMode, out)
-                @Suppress("DEPRECATION")
-                (out.last() as? TextRenderer)?.experimentalSetLegacyDecodingEnabled(true)
-            }
-        }
-        return renderersFactory
     }
 
     /**
@@ -418,12 +152,11 @@ object PlayerHelper {
         val dataSourceFactory = DefaultDataSource.Factory(context)
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
 
         return ExoPlayer.Builder(context)
             .setUsePlatformDiagnostics(false)
-            .setRenderersFactory(createRendererFactory(context))
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .setTrackSelector(trackSelector)
             .setHandleAudioBecomingNoisy(true)
@@ -479,52 +212,6 @@ object PlayerHelper {
                     (currentPositionSeconds - chapter.start) < ChapterSegment.HIGHLIGHT_LENGTH
                 chapter.highlightDrawable == null || isWithinMaxHighlightDuration
             }
-    }
-
-    private fun getTracksByType(player: Player, trackType: Int): List<Format> {
-        val formats = mutableListOf<Format>()
-
-        for (trackGroup in player.currentTracks.groups) {
-            if (trackGroup.type != trackType) continue
-
-            for (i in 0 until trackGroup.length) {
-                val track = trackGroup.getTrackFormat(i)
-                formats.add(track)
-            }
-        }
-        return formats
-    }
-
-    fun getCaptionTracks(player: Player) = getTracksByType(player, C.TRACK_TYPE_TEXT)
-
-    private fun getCurrentFormatByTrackType(player: Player, trackType: Int): Format? {
-        for (trackGroup in player.currentTracks.groups) {
-            if (trackGroup.type != trackType) continue
-
-            for (i in 0 until trackGroup.length) {
-                if (trackGroup.isTrackSelected(i)) return trackGroup.getTrackFormat(i)
-            }
-        }
-
-        return null
-    }
-
-    fun getCurrentPlayedCaptionFormat(player: Player): Format? {
-        return getCurrentFormatByTrackType(player, C.TRACK_TYPE_TEXT)
-    }
-
-    fun getCurrentVideoFormat(player: Player): Format? {
-        return getCurrentFormatByTrackType(player, C.TRACK_TYPE_VIDEO)
-    }
-
-    fun getSubtitleRoleFlags(subtitle: Subtitle?): Int {
-        if (subtitle?.code == null) return 0
-
-        return if (subtitle.autoGenerated != true) {
-            C.ROLE_FLAG_CAPTION
-        } else {
-            ROLE_FLAG_AUTO_GEN_SUBTITLE
-        }
     }
 
     /**
@@ -701,40 +388,6 @@ object PlayerHelper {
     }
 
     @OptIn(androidx.media3.common.util.UnstableApi::class)
-    fun getVideoStats(tracks: Tracks, videoId: String): VideoStats {
-        val videoStats = VideoStats(videoId, "", "", "")
-
-        for (group in tracks.groups) {
-            if (!group.isSelected || group.length == 0) continue
-
-            when (group.type) {
-                C.TRACK_TYPE_AUDIO -> {
-                    val audioFormat = (0..group.length).firstOrNull { index ->
-                        group.isTrackSelected(index)
-                    }?.let { index -> group.getTrackFormat(index) } ?: continue
-
-                    videoStats.audioInfo = "${audioFormat.codecs.orEmpty()} ${
-                        TextUtils.formatBitrate(audioFormat.bitrate)
-                    }"
-                }
-
-                C.TRACK_TYPE_VIDEO -> {
-                    val videoFormat = (0..group.length).firstOrNull { index ->
-                        group.isTrackSelected(index)
-                    }?.let { index -> group.getTrackFormat(index) } ?: continue
-
-                    videoStats.videoInfo = "${videoFormat.codecs.orEmpty()} ${
-                        TextUtils.formatBitrate(videoFormat.bitrate)
-                    }"
-                    videoStats.videoQuality =
-                        "${videoFormat.width}x${videoFormat.height} ${videoFormat.frameRate.toInt()}fps"
-                }
-            }
-        }
-
-        return videoStats
-    }
-
     fun getPlayPauseActionIcon(player: Player) = when {
         player.isPlaying -> R.drawable.ic_pause
         player.playbackState == Player.STATE_ENDED -> R.drawable.ic_restart

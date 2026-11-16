@@ -2,6 +2,9 @@ package com.github.libretube.repo
 
 import android.util.Log
 import com.github.libretube.api.SubscriptionHelper
+import com.github.libretube.LibreTubeApp
+import com.github.libretube.helpers.NetworkHelper
+import kotlin.coroutines.cancellation.CancellationException
 import com.github.libretube.api.obj.StreamItem
 import com.github.libretube.api.obj.Subscription
 import com.github.libretube.api.toStreamItem
@@ -52,6 +55,9 @@ class LocalFeedRepository : FeedRepository {
         refresh: FeedRefresh,
         onProgressUpdate: (FeedProgress) -> Unit
     ): List<StreamItem> {
+        if (!NetworkHelper.isNetworkAvailable(LibreTubeApp.instance)) {
+            return DatabaseHolder.Database.feedDao().getAll().map(SubscriptionsFeedItem::toStreamItem)
+        }
         val nowMillis = Instant.now().toEpochMilli()
         val minimumDateMillis = nowMillis - Duration.ofDays(MAX_FEED_AGE_DAYS).toMillis()
 
@@ -63,7 +69,7 @@ class LocalFeedRepository : FeedRepository {
                 DatabaseHolder.Database.feedDao().deleteAllExcept(channelIds)
                 channelIds
             }
-            is FeedRefresh.Automatically -> emptyList()
+            is FeedRefresh.Automatically -> SubscriptionHelper.getSubscriptionChannelIds()
             is FeedRefresh.OnlySome -> refresh.channelIds
         }
 
@@ -83,7 +89,9 @@ class LocalFeedRepository : FeedRepository {
 
         DatabaseHolder.Database.feedDao().cleanUpOlderThan(minimumDateMillis)
         refreshFeed(channelIdsToRefresh, minimumDateMillis, onProgressUpdate)
-        PreferenceHelper.putLong(PreferenceKeys.LAST_LOCAL_FEED_REFRESH_TIMESTAMP_MILLIS, nowMillis)
+        if (refresh !is FeedRefresh.OnlySome) {
+            PreferenceHelper.putLong(PreferenceKeys.LAST_LOCAL_FEED_REFRESH_TIMESTAMP_MILLIS, nowMillis)
+        }
 
         return DatabaseHolder.Database.feedDao().getAll().map(SubscriptionsFeedItem::toStreamItem)
     }
@@ -116,6 +124,8 @@ class LocalFeedRepository : FeedRepository {
                             // increase counter if we had to fully fetch the channel
                             channelExtractionCount.incrementAndGet()
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.e(channelId, e.stackTraceToString())
                     null

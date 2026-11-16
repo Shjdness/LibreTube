@@ -16,7 +16,7 @@ import com.github.libretube.databinding.PlaybackBottomSheetBinding
 import com.github.libretube.enums.PlayerCommand
 import com.github.libretube.extensions.round
 import com.github.libretube.helpers.PreferenceHelper
-import com.github.libretube.services.AbstractPlayerService
+import com.github.libretube.services.AudioPlaybackService
 import com.github.libretube.ui.adapters.SliderLabelsAdapter
 import kotlin.math.absoluteValue
 import kotlin.math.log
@@ -110,7 +110,7 @@ class PlaybackOptionsSheet(
 
         binding.skipSilence.setOnCheckedChangeListener { _, isChecked ->
             player.sendCustomCommand(
-                AbstractPlayerService.runPlayerActionCommand,
+                AudioPlaybackService.runPlayerActionCommand,
                 bundleOf(PlayerCommand.SKIP_SILENCE.name to isChecked)
             )
             PreferenceHelper.putBoolean(PreferenceKeys.SKIP_SILENCE, isChecked)

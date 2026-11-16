@@ -7,7 +7,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import com.github.libretube.LibreTubeApp
 import com.github.libretube.api.poToken.PoTokenGenerator
-import com.github.libretube.helpers.DisplayHelper
 import com.github.libretube.player.manifest.Representation
 import com.github.libretube.player.manifest.SabrManifest
 import com.github.libretube.ui.dialogs.ShareDialog
@@ -25,8 +24,6 @@ import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
 import video_streaming.BufferedRangeOuterClass.BufferedRange
 import video_streaming.ClientAbrStateOuterClass.ClientAbrState
 import video_streaming.FormatInitializationMetadataOuterClass.FormatInitializationMetadata
-import video_streaming.MediaCapabilitiesOuterClass.MediaCapabilities
-import video_streaming.MediaCapabilitiesOuterClass.MediaCapabilities.VideoFormatCapability
 import video_streaming.MediaHeaderOuterClass.MediaHeader
 import video_streaming.NextRequestPolicyOuterClass.NextRequestPolicy
 import video_streaming.PlaybackCookieOuterClass.PlaybackCookie
@@ -41,7 +38,6 @@ import video_streaming.StreamerContextOuterClass.StreamerContext.SabrContext
 import video_streaming.UmpPartId.UMPPartId
 import video_streaming.VideoPlaybackAbrRequestOuterClass.VideoPlaybackAbrRequest
 import java.time.Instant
-import kotlin.math.max
 
 class PlaybackRequest(
     /* Format for which new media data is being requested */
@@ -168,8 +164,6 @@ class SabrClient private constructor(
 
     /** Audio format video format */
     private var audioFormat: Representation? = null
-    /** Optional video format */
-    private var videoFormat: Representation? = null
 
     constructor(manifest: SabrManifest) : this(
         manifest.videoId,
@@ -265,15 +259,8 @@ class SabrClient private constructor(
 
     @OptIn(UnstableApi::class)
     fun selectFormat(representation: Representation) {
-        if (videoFormat == representation || audioFormat == representation) {
-            return
-        }
-
-        if (MimeTypes.isAudio(representation.format.containerMimeType)) {
-            audioFormat = representation
-        } else if (MimeTypes.isVideo(representation.format.containerMimeType)) {
-            videoFormat = representation
-        }
+        require(MimeTypes.isAudio(representation.format.containerMimeType))
+        audioFormat = representation
     }
 
     /**
@@ -322,7 +309,7 @@ class SabrClient private constructor(
                     // clear previous formats to prevent advertising stale data to the server/buffering them
                     // we only dio this after requesting new data, to avoid accidentally clearing to the currently selected format,
                     // e.g. killing the current buffer
-                    initializedFormats.keys.retainAll { audioFormat?.stream?.itag == it || videoFormat?.stream?.itag == it }
+                    initializedFormats.keys.retainAll { audioFormat?.stream?.itag == it }
                 }
                 format = format ?: initializedFormats[itag]
                 return@withContext format?.getSegment(playbackRequest.segment)
@@ -338,7 +325,7 @@ class SabrClient private constructor(
      */
     private suspend fun media(playbackRequest: PlaybackRequest) {
         // update currently held UMP data
-        val data = fetchStreamData(playbackRequest, audioFormat, videoFormat)
+        val data = fetchStreamData(playbackRequest, audioFormat)
 
         val parser = UmpParser(data)
         while (true) {
@@ -354,7 +341,6 @@ class SabrClient private constructor(
     private suspend fun fetchStreamData(
         playbackRequest: PlaybackRequest,
         audioFormat: Representation?,
-        videoFormat: Representation?,
     ): ByteArray {
         backoffTime?.let { backoff ->
             Log.i(TAG, "fetchStreamData: Waiting for ${backoff}ms before making a request")
@@ -368,22 +354,7 @@ class SabrClient private constructor(
         val playerTimeMs = playbackRequest.segmentStartTimeMs
         val clientState = ClientAbrState.newBuilder()
             .setPlayerTimeMs(playerTimeMs)
-            // only set for mobile clients
-            .setMediaCapabilities(
-                MediaCapabilities.newBuilder()
-                    .setHdrModeBitmask(if (DisplayHelper.supportsHdr(LibreTubeApp.instance)) 3 else 0)
-                    .addAllVideoFormatCapabilities(
-                        VideoFormatCapability.VideoCodec.entries.map {
-                            VideoFormatCapability.newBuilder()
-                                .setVideoCodec(it.ordinal)
-                                .setIs10BitSupported(true)
-                                .setEfficient(true)
-                                .build()
-                        }
-                    )
-                    .build()
-            )
-            .setEnabledTrackTypesBitfield(if (videoFormat == null) 1 else 0)
+            .setEnabledTrackTypesBitfield(1)
             .setPlaybackRate(playbackRequest.playbackSpeed)
             .setElapsedWallTimeMs(lastRequestMs?.let { now -  it } ?: 0 )
             .setTimeSinceLastSeek(lastSeekMs?.let { now - it } ?: 0)
@@ -394,10 +365,10 @@ class SabrClient private constructor(
             .setEnableVoiceBoost(xtags?.isVoiceBoosted() ?: false)
             .setClientViewportIsFlexible(false)
             .setBandwidthEstimate(bandwidthEstimator.bitrateEstimate)
-            .setStickyResolution(max(videoFormat?.stream?.height ?: 0, 360))
-            .setClientViewportHeight(max(videoFormat?.stream?.height ?: 0, 360))
-            .setClientViewportWidth(max(videoFormat?.stream?.width ?: 0, 640))
-            .setLastManualSelectedResolution(max(videoFormat?.stream?.height ?: 0, 360))
+            .setStickyResolution(360)
+            .setClientViewportHeight(360)
+            .setClientViewportWidth(640)
+            .setLastManualSelectedResolution(360)
             .setVisibility(1)
             .build()
 
@@ -405,7 +376,6 @@ class SabrClient private constructor(
             .setPlayerTimeMs(playerTimeMs)
             .setVideoPlaybackUstreamerConfig(ustreamerConfig)
             .addAllPreferredAudioFormatIds(listOfNotNull(audioFormat?.formatId()))
-            .addAllPreferredVideoFormatIds(listOfNotNull(videoFormat?.formatId()))
             .addAllSelectedFormatIds(initializedFormats.values.map { it.id }.toList())
             .addAllBufferedRanges(initializedFormats.values.flatMap { it.buildBufferedRanges() })
             .setStreamerContext(

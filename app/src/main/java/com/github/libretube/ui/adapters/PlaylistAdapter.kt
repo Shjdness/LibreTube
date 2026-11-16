@@ -1,25 +1,20 @@
 package com.github.libretube.ui.adapters
 
+import android.text.format.DateUtils
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.core.os.bundleOf
-import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.ListAdapter
 import com.github.libretube.api.obj.StreamItem
 import com.github.libretube.constants.IntentData
-import com.github.libretube.databinding.VideoRowBinding
+import com.github.libretube.databinding.PlaylistTrackRowBinding
 import com.github.libretube.extensions.toID
-import com.github.libretube.helpers.ImageHelper
-import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.ui.adapters.callbacks.DiffUtilItemCallback
 import com.github.libretube.ui.base.BaseActivity
-import com.github.libretube.ui.extensions.setFormattedDuration
-import com.github.libretube.ui.extensions.setWatchProgressLength
 import com.github.libretube.ui.sheets.VideoOptionsBottomSheet
 import com.github.libretube.ui.sheets.VideoOptionsBottomSheet.Companion.VIDEO_OPTIONS_SHEET_REQUEST_KEY
 import com.github.libretube.ui.viewholders.PlaylistViewHolder
-import com.github.libretube.util.TextUtils
 
 data class PlaylistItem(
     val item: StreamItem,
@@ -51,25 +46,18 @@ class PlaylistAdapter(
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PlaylistViewHolder {
         val layoutInflater = LayoutInflater.from(parent.context)
-        val binding = VideoRowBinding.inflate(layoutInflater, parent, false)
+        val binding = PlaylistTrackRowBinding.inflate(layoutInflater, parent, false)
         return PlaylistViewHolder(binding)
     }
 
     override fun onBindViewHolder(holder: PlaylistViewHolder, position: Int) {
         val (streamItem, _) = getItem(position)!!
-        val videoId = streamItem.url!!.toID()
+        val videoId = streamItem.url?.toID()
 
         holder.binding.apply {
             videoTitle.text = streamItem.title
-            videoInfo.text = TextUtils.formatViewsString(root.context, streamItem.views ?: -1, streamItem.uploaded)
-            videoInfo.maxLines = 2
-
-            // piped does not load channel avatars for playlist views
-            channelImageContainer.isGone = true
             channelName.text = streamItem.uploaderName
-
-            ImageHelper.loadImage(streamItem.thumbnail, thumbnail)
-            thumbnailDuration.setFormattedDuration(streamItem.duration ?: -1, streamItem.isShort, streamItem.uploaded)
+            duration.text = streamItem.duration?.takeIf { it > 0 }?.let(DateUtils::formatElapsedTime)
 
             root.setOnClickListener {
                 onVideoClick(streamItem)
@@ -77,12 +65,13 @@ class PlaylistAdapter(
 
             val activity = (root.context as BaseActivity)
             val fragmentManager = activity.supportFragmentManager
-            root.setOnLongClickListener {
+            val showOptions = {
                 fragmentManager.setFragmentResultListener(
                     VIDEO_OPTIONS_SHEET_REQUEST_KEY,
                     activity
                 ) { _, _ ->
-                    notifyItemChanged(position)
+                    val index = holder.bindingAdapterPosition
+                    if (index in currentList.indices) notifyItemChanged(index)
                 }
                 VideoOptionsBottomSheet().apply {
                     arguments = bundleOf(
@@ -91,16 +80,9 @@ class PlaylistAdapter(
                     )
                 }
                     .show(fragmentManager, VideoOptionsBottomSheet::class.java.name)
-                true
             }
-
-            if (!streamItem.uploaderUrl.isNullOrBlank()) {
-                channelContainer.setOnClickListener {
-                    NavigationHelper.navigateChannel(root.context, streamItem.uploaderUrl)
-                }
-            }
-
-            streamItem.duration?.let { watchProgress.setWatchProgressLength(videoId, it) }
+            trackMenu.setOnClickListener { showOptions() }
+            root.setOnLongClickListener { showOptions(); true }
 
             downloadBadge.isVisible = videoId in downloadedAudioIds
         }

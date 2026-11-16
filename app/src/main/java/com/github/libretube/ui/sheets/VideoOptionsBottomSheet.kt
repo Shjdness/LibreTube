@@ -27,7 +27,6 @@ import com.github.libretube.ui.dialogs.AddToPlaylistDialog
 import com.github.libretube.ui.dialogs.ShareDialog
 import com.github.libretube.ui.fragments.SubscriptionsFragment
 import com.github.libretube.util.PlayingQueue
-import com.github.libretube.util.PlayingQueueMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -53,8 +52,7 @@ class VideoOptionsBottomSheet : BaseBottomSheet() {
                     playerData = PlayerData(
                         videoId = videoId,
                         playlistId = playlistId,
-                    ),
-                    audioOnlyPlayerRequested = true
+                    )
                 )
             }
             // Add Video to Playlist Dialog
@@ -189,7 +187,7 @@ class VideoOptionsBottomSheet : BaseBottomSheet() {
             mutableListOf(VideoBottomSheetItem.PlayOnBackground)
 
         // Check whether the player is running and add queue options
-        if (PlayingQueue.isNotEmpty() && PlayingQueue.queueMode == PlayingQueueMode.ONLINE) {
+        if (PlayingQueue.isNotEmpty()) {
             optionsList += VideoBottomSheetItem.PlayNext
             optionsList += VideoBottomSheetItem.AddToQueue
         }

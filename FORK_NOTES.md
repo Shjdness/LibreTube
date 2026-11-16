@@ -37,12 +37,17 @@ git checkout custom && git merge master
 
 ## 构建
 
-参考 `.github/workflows/ci.yml` 与 `CONTRIBUTING.md`：
+参考 `.github/workflows/ci.yml` 与 `CONTRIBUTING.md`。Libreplayer 个人正式版构建任务为 `:app:assembleRelease`。
 
 - JDK 17（Temurin）+ Android SDK（compileSdk 36 / minSdk 26 / targetSdk 36）
-- Windows：`gradlew.bat assembleDebug`
+- Windows：`gradlew.bat :app:assembleRelease`
+- 覆盖升级以 `com.github.libretube.debug` 和既有用户安装证书为准，后续构建递增 `versionCode`。
+- 通过本机的 `keystore.properties` 配置同一签名密钥，或使用 Android SDK 的 `apksigner` 对正式 APK 签名。密钥与密码保存在仓库外。
+- 发包前，用旧 APK 的数据库和音频文件做 `adb install -r` 验证，并核对新旧签名证书 SHA-256。
 
 ## 修改记录
 
 - 2026-11-16：fork 并建立本地工作区，新增本说明文件。
 - 2026-11-16：移除相关内容、联网搜索建议、SponsorBlock、应用内升级、捐赠、帮助、关于。设置中保留许可证与源码入口。下载统一选取最高码率音轨，按频道浏览。媒体库播放列表优先播放已完整下载的本地音频。旧数据库升级时保留媒体库、历史和下载记录。
+- 2026-11-16：移除视频播放器、视频画中画、分辨率和字幕设置，统一走音频播放。旧播放列表封面从已下载的缩略图或列表条目补取。
+- 2026-11-16：更名 Libreplayer，移除登录和同步 UI，资料库改文字行，播放队列统一使用媒体前台服务。保留旧版安装标识及升级签名兼容。

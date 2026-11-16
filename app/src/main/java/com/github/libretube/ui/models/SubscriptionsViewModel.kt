@@ -17,6 +17,8 @@ import com.github.libretube.helpers.PreferenceHelper
 import com.github.libretube.repo.FeedProgress
 import com.github.libretube.repo.FeedRefresh
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
 
 class SubscriptionsViewModel : ViewModel() {
@@ -30,13 +32,22 @@ class SubscriptionsViewModel : ViewModel() {
     val groups = MutableLiveData<List<SubscriptionGroup>>()
     var groupToEdit: SubscriptionGroup? = null
 
+    private var feedJob: Job? = null
+    val feedError = MutableLiveData<Boolean>()
+
     fun fetchFeed(context: Context, refresh: FeedRefresh) {
-        viewModelScope.launch(Dispatchers.IO) {
+        feedJob?.cancel()
+        feedError.value = false
+        feedJob = viewModelScope.launch(Dispatchers.IO) {
             val videoFeed = try {
                 SubscriptionHelper.getFeed(refresh) { feedProgress ->
                     this@SubscriptionsViewModel.feedProgress.postValue(feedProgress)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                feedProgress.postValue(null)
+                feedError.postValue(true)
                 context.toastFromMainDispatcher(R.string.server_error)
                 Log.e(TAG(), e.toString())
                 return@launch

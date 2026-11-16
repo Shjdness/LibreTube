@@ -7,9 +7,7 @@ import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.db.DatabaseHolder.Database
 import com.github.libretube.db.obj.DownloadPlaylist
 import com.github.libretube.db.obj.DownloadPlaylistVideosCrossRef
-import com.github.libretube.enums.SyncServerType
 import com.github.libretube.extensions.toID
-import com.github.libretube.repo.LocalUserDataRepository
 import com.github.libretube.enums.PlaylistType
 import com.github.libretube.helpers.PreferenceHelper
 import com.github.libretube.obj.PipedImportPlaylist
@@ -48,7 +46,10 @@ object PlaylistsHelper {
     suspend fun getPlaylist(playlistId: String, playlistType: PlaylistType): Playlist {
         // load locally stored playlists with the auth api
         return when (playlistType) {
-            PlaylistType.PUBLIC -> MediaServiceRepository.instance.getPlaylist(playlistId)
+            PlaylistType.PUBLIC -> MediaServiceRepository.instance.getPlaylist(playlistId).let { playlist ->
+                if (!playlist.thumbnailUrl.isNullOrBlank()) playlist
+                else playlist.copy(thumbnailUrl = playlist.relatedStreams.firstNotNullOfOrNull { it.thumbnail?.takeIf(String::isNotBlank) })
+            }
             else -> userDataRepository.getPlaylist(playlistId)
         }
     }
@@ -70,21 +71,10 @@ object PlaylistsHelper {
         return Playlist(
             name = cached.downloadPlaylist.title,
             description = cached.downloadPlaylist.description,
-            thumbnailUrl = tracks.first().thumbnail,
+            thumbnailUrl = tracks.firstNotNullOfOrNull { it.thumbnail },
             videos = tracks.size,
             relatedStreams = tracks
         )
-    }
-
-    suspend fun getOfflinePlaylists(): List<Playlists> {
-        val local = LocalUserDataRepository().getPlaylists()
-        if (UserDataRepositoryHelper.syncServerType == SyncServerType.NONE) return sortPlaylists(local)
-        val cached = Database.downloadDao().getDownloadPlaylists().mapNotNull { record ->
-            if (getPlaylistType(record.downloadPlaylist.playlistId) == PlaylistType.PUBLIC) return@mapNotNull null
-            val playlist = getCachedPlaylist(record.downloadPlaylist.playlistId) ?: return@mapNotNull null
-            Playlists(record.downloadPlaylist.playlistId, playlist.name, playlist.description, playlist.thumbnailUrl, playlist.videos.toLong())
-        }
-        return sortPlaylists((cached + local).distinctBy { it.id })
     }
 
     suspend fun getAllPlaylistsWithVideos(playlistIds: List<String>? = null): List<Playlist> {

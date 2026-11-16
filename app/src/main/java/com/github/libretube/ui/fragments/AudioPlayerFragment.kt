@@ -31,6 +31,7 @@ import com.github.libretube.constants.IntentData
 import com.github.libretube.databinding.FragmentAudioPlayerBinding
 import com.github.libretube.enums.PlayerCommand
 import com.github.libretube.extensions.navigateVideo
+import com.github.libretube.extensions.parcelable
 import com.github.libretube.extensions.normalize
 import com.github.libretube.extensions.seekBy
 import com.github.libretube.extensions.toID
@@ -44,9 +45,7 @@ import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.helpers.PlayerHelper
 import com.github.libretube.helpers.ThemeHelper
 import com.github.libretube.parcelable.PlayerData
-import com.github.libretube.services.AbstractPlayerService
-import com.github.libretube.services.OfflinePlayerService
-import com.github.libretube.services.OnlinePlayerService
+import com.github.libretube.services.AudioPlaybackService
 import com.github.libretube.ui.activities.AbstractPlayerHostActivity
 import com.github.libretube.ui.extensions.getSystemInsets
 import com.github.libretube.ui.extensions.setOnBackPressed
@@ -78,39 +77,17 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
     private var transitionStartId = 0
     private var transitionEndId = 0
 
-    private var handler = Handler(Looper.getMainLooper())
+    private val handler = Handler(Looper.getMainLooper())
+    private val refreshPosition = Runnable { updateSeekBar() }
     private var isPaused = !PlayerHelper.playAutomatically
 
-    var isOffline: Boolean = false
-        private set
     private var playerController: MediaController? = null
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-        audioHelper = AudioHelper(requireContext())
-
-        isOffline = requireArguments().getBoolean(IntentData.offlinePlayer)
-
-        BackgroundHelper.startMediaService(
-            requireContext(),
-            if (isOffline) OfflinePlayerService::class.java else OnlinePlayerService::class.java,
-        ) {
-            if (_binding == null) {
-                it.sendCustomCommand(AbstractPlayerService.stopServiceCommand, Bundle.EMPTY)
-                it.release()
-                return@startMediaService
-            }
-
-            playerController = it
-            handleServiceConnection()
-        }
-    }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         _binding = FragmentAudioPlayerBinding.bind(view)
         super.onViewCreated(view, savedInstanceState)
+        audioHelper = AudioHelper(requireContext())
 
         // manually apply additional padding for edge-to-edge compatibility
         activity.getSystemInsets()?.let { systemBars ->
@@ -125,6 +102,19 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         }
 
         initializeTransitionLayout()
+        val owner = viewLifecycleOwner
+        BackgroundHelper.connect(requireContext()) { controller ->
+            if (_binding == null || !owner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.INITIALIZED)) {
+                controller.release()
+            } else {
+                playerController = controller
+                handleServiceConnection()
+                requireArguments().parcelable<PlayerData>(IntentData.playerData)?.let { request ->
+                    requireArguments().remove(IntentData.playerData)
+                    startQueue(request)
+                }
+            }
+        }
 
         // select the title TV in order for it to automatically scroll
         binding.title.isSelected = true
@@ -146,11 +136,11 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         }
 
         binding.prev.setOnClickListener {
-            playerController?.navigateVideo(PlayingQueue.getPrev() ?: return@setOnClickListener)
+            playerController?.seekToPrevious()
         }
 
         binding.next.setOnClickListener {
-            playerController?.navigateVideo(PlayingQueue.getNext() ?: return@setOnClickListener)
+            playerController?.seekToNext()
         }
 
         binding.rewindBTN.setOnClickListener {
@@ -179,14 +169,9 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
             }
         }
 
+        binding.trackOptions.setOnClickListener { onLongTap() }
         binding.sleepTimer.setOnClickListener {
             SleepTimerSheet().show(childFragmentManager)
-        }
-
-        binding.openVideo.isVisible = !isOffline
-        binding.openVideo.setOnClickListener {
-            val currentId = PlayingQueue.getCurrent()?.url?.toID()
-            switchToVideoMode(currentId ?: return@setOnClickListener)
         }
 
         childFragmentManager.setFragmentResultListener(
@@ -269,52 +254,29 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         }
     }
 
-    fun switchToVideoMode(videoId: String) {
-        playerController?.sendCustomCommand(
-            AbstractPlayerService.runPlayerActionCommand,
-            bundleOf(PlayerCommand.TOGGLE_AUDIO_ONLY_MODE.name to false)
-        )
-
-        killFragment(false)
-
-        NavigationHelper.openVideoPlayerFragment(
-            context = requireContext(),
-            playerData = PlayerData(
-                videoId = videoId,
-                isOffline = isOffline
-            ),
-            alreadyStarted = true
-        )
-    }
-
     private fun killFragment(stopPlayer: Boolean) {
         viewModel.isMiniPlayerVisible.value = false
 
         if (stopPlayer) playerController?.sendCustomCommand(
-            AbstractPlayerService.stopServiceCommand,
+            AudioPlaybackService.stopServiceCommand,
             Bundle.EMPTY
         )
         playerController?.release()
         playerController = null
 
-        viewModel.isFullscreen.value = false
         binding.playerMotionLayout.transitionToEnd()
         activity.supportFragmentManager.commit {
             remove(this@AudioPlayerFragment)
         }
     }
 
-    fun startOfflineQueue(playerData: PlayerData): Boolean {
+    fun startQueue(playerData: PlayerData): Boolean {
         val controller = playerController ?: return false
         controller.sendCustomCommand(
-            AbstractPlayerService.startServiceCommand,
-            bundleOf(IntentData.playerData to playerData, IntentData.audioOnly to true)
+            AudioPlaybackService.startServiceCommand,
+            bundleOf(IntentData.playerData to playerData)
         )
         return true
-    }
-
-    fun playNextVideo(videoId: String) {
-        playerController?.navigateVideo(videoId)
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -374,7 +336,7 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
     }
 
     private fun updateThumbnailAsync(thumbnailUri: Uri) {
-        if (DataSaverMode.isEnabled(requireContext()) && !isOffline) {
+        if (DataSaverMode.isEnabled(requireContext()) && thumbnailUri.scheme?.startsWith("http") == true) {
             binding.progress.isVisible = false
             binding.thumbnail.setImageResource(R.drawable.ic_launcher_monochrome)
             val primaryColor = ThemeHelper.getThemeColor(
@@ -401,6 +363,7 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
     }
 
     private fun initializeSeekBar() {
+        binding.timeBar.clearOnChangeListeners()
         binding.timeBar.addOnChangeListener { _, value, fromUser ->
             if (fromUser) playerController?.seekTo(value.toLong() * 1000)
         }
@@ -412,12 +375,13 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
      */
     private fun updateSeekBar() {
         val binding = _binding ?: return
+        handler.removeCallbacks(refreshPosition)
         val duration = playerController?.duration?.takeIf { it > 0 } ?: let {
             // if there's no duration available, clear everything
             binding.timeBar.value = 0f
             binding.duration.text = ""
             binding.currentPosition.text = ""
-            handler.postDelayed(this::updateSeekBar, 100)
+            handler.postDelayed(refreshPosition, 100)
             return
         }
         val currentPosition = playerController?.currentPosition?.toFloat() ?: 0f
@@ -429,14 +393,16 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         )
 
         // update the time bar current value and maximum value
-        binding.timeBar.valueTo = (duration / 1000).toFloat()
+        val end = (duration / 1000f).coerceAtLeast(1f)
+        if (binding.timeBar.value > end) binding.timeBar.value = end
+        binding.timeBar.valueTo = end
         binding.timeBar.value = clamp(
             currentPosition / 1000,
             binding.timeBar.valueFrom,
             binding.timeBar.valueTo
         )
 
-        handler.postDelayed(this::updateSeekBar, 200)
+        handler.postDelayed(refreshPosition, 200)
     }
 
     private fun updatePlayPauseButton() {
@@ -482,8 +448,11 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
     }
 
     override fun onDestroyView() {
-        super.onDestroyView()
+        handler.removeCallbacksAndMessages(null)
+        playerController?.release()
+        playerController = null
         _binding = null
+        super.onDestroyView()
     }
 
     override fun onSingleTap() {

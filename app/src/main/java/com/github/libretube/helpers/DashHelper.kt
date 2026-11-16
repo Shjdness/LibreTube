@@ -25,7 +25,7 @@ object DashHelper {
         val audioLocale: String? = null
     )
 
-    fun createManifest(streams: Streams, supportsHdr: Boolean): String {
+    fun createManifest(streams: Streams): String {
         val builder = builderFactory.newDocumentBuilder()
 
         val doc = builder.newDocument()
@@ -39,30 +39,6 @@ object DashHelper {
         val period = doc.createElement("Period")
 
         val adapSetInfos = ArrayList<AdapSetInfo>()
-
-        for (stream in streams.videoStreams) {
-            // HDR is only supported by some new devices
-            if (!supportsHdr && stream.quality.orEmpty().uppercase().contains("HDR")) {
-                continue
-            }
-
-            // ignore dual format and OTF streams
-            if (!stream.videoOnly!! || stream.indexEnd!! <= 0) {
-                continue
-            }
-
-            val adapSetInfo = adapSetInfos.find { it.mimeType == stream.mimeType }
-            if (adapSetInfo != null) {
-                adapSetInfo.formats.add(stream)
-                continue
-            }
-            adapSetInfos.add(
-                AdapSetInfo(
-                    stream.mimeType!!,
-                    mutableListOf(stream)
-                )
-            )
-        }
 
         for (stream in streams.audioStreams) {
             val adapSetInfo =
@@ -110,21 +86,8 @@ object DashHelper {
                 adapSetElement.appendChild(roleElement)
             }
 
-            val isVideo = adapSet.mimeType.contains("video")
-
-            if (isVideo) {
-                adapSetElement.setAttribute("scanType", "progressive")
-            }
-
             for (stream in adapSet.formats) {
-                val rep = let {
-                    if (isVideo) {
-                        createVideoRepresentation(doc, stream)
-                    } else {
-                        createAudioRepresentation(doc, stream)
-                    }
-                }
-                adapSetElement.appendChild(rep)
+                adapSetElement.appendChild(createAudioRepresentation(doc, stream))
             }
 
             period.appendChild(adapSetElement)
@@ -189,31 +152,4 @@ object DashHelper {
         }
     }
 
-    private fun createVideoRepresentation(
-        doc: Document,
-        stream: PipedStream
-    ): Element {
-        val representation = doc.createElement("Representation")
-        representation.setAttribute("codecs", stream.codec!!)
-        representation.setAttribute("bandwidth", stream.bitrate.toString())
-        representation.setAttribute("width", stream.width.toString())
-        representation.setAttribute("height", stream.height.toString())
-        representation.setAttribute("maxPlayoutRate", "1")
-        representation.setAttribute("frameRate", stream.fps.toString())
-
-        val baseUrl = doc.createElement("BaseURL")
-        baseUrl.appendChild(doc.createTextNode(stream.url!!))
-
-        val segmentBase = doc.createElement("SegmentBase")
-        segmentBase.setAttribute("indexRange", "${stream.indexStart}-${stream.indexEnd}")
-
-        val initialization = doc.createElement("Initialization")
-        initialization.setAttribute("range", "${stream.initStart}-${stream.initEnd}")
-        segmentBase.appendChild(initialization)
-
-        representation.appendChild(baseUrl)
-        representation.appendChild(segmentBase)
-
-        return representation
-    }
 }

@@ -5,7 +5,6 @@ import android.content.res.Configuration
 import android.os.Bundle
 import android.view.View
 import androidx.core.os.bundleOf
-import androidx.core.view.children
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.fragment.app.activityViewModels
@@ -18,6 +17,7 @@ import com.github.libretube.constants.IntentData
 import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.databinding.FragmentSubscriptionsBinding
 import com.github.libretube.db.DatabaseHelper
+import com.github.libretube.db.DatabaseHolder.Database
 import com.github.libretube.extensions.toID
 import com.github.libretube.extensions.toastFromMainDispatcher
 import com.github.libretube.helpers.NavigationHelper
@@ -45,9 +45,11 @@ class SubscriptionsFragment : DynamicLayoutManagerFragment(R.layout.fragment_sub
 
     private val viewModel: SubscriptionsViewModel by activityViewModels()
 
-    private var selectedFilterGroup
-        set(value) = PreferenceHelper.putInt(PreferenceKeys.SELECTED_CHANNEL_GROUP, value)
-        get() = PreferenceHelper.getInt(PreferenceKeys.SELECTED_CHANNEL_GROUP, FILTER_GROUP_ALL)
+    private var selectedGroup: String
+        get() = PreferenceHelper.getString(PreferenceKeys.SELECTED_CHANNEL_GROUP_KEY, GROUP_ALL)
+        set(value) = PreferenceHelper.putString(PreferenceKeys.SELECTED_CHANNEL_GROUP_KEY, value)
+
+    private var rebuildingGroups = false
 
     private var isAppBarFullyExpanded = true
 
@@ -118,9 +120,7 @@ class SubscriptionsFragment : DynamicLayoutManagerFragment(R.layout.fragment_sub
                 PreferenceHelper.updateLastFeedWatchedTime(it, true)
             }
 
-            // ungrouped chip is hidden if the user doesn't use channel groups
-            binding.chipUngrouped.isVisible = !viewModel.groups.value.isNullOrEmpty()
-                    && filterUngroupedStreamItems(feed.orEmpty()).isNotEmpty()
+            updateUngroupedVisibility()
         }
 
         viewModel.feedProgress.observe(viewLifecycleOwner) { progress ->
@@ -150,15 +150,11 @@ class SubscriptionsFragment : DynamicLayoutManagerFragment(R.layout.fragment_sub
         binding.subRefresh.setOnRefreshListener {
             viewModel.fetchFeed(
                 requireContext(),
-                when (selectedFilterGroup) {
-                    FILTER_GROUP_ALL -> FeedRefresh.All
-                    FILTER_GROUP_UNGROUPED -> viewModel.subscriptions.value?.let { subscriptions ->
-                        FeedRefresh.OnlySome(subscriptions.map { it.url.toID() })
-                    } ?: FeedRefresh.All // fallback if subscriptions weren't loaded yet
-                    else -> FeedRefresh.OnlySome(
-                        viewModel.groups.value?.getOrNull(selectedFilterGroup)
-                            ?.channels.orEmpty()
-                    )
+                when (val key = selectedGroup) {
+                    GROUP_ALL -> FeedRefresh.All
+                    GROUP_UNGROUPED -> if (viewModel.subscriptions.value == null) FeedRefresh.All
+                    else FeedRefresh.OnlySome(ungroupedChannelIds())
+                    else -> FeedRefresh.OnlySome(groupChannels(key).toList())
                 }
             )
         }
@@ -170,17 +166,18 @@ class SubscriptionsFragment : DynamicLayoutManagerFragment(R.layout.fragment_sub
                 .show(childFragmentManager)
         }
 
-        binding.channelGroups.setOnCheckedStateChangeListener { group, _ ->
-            selectedFilterGroup =
-                group.children.indexOfFirst { it.id == group.checkedChipId } - 1 // 0th index is "all" button
-
-            lifecycleScope.launch {
-                showFeed(restoreScrollState = false)
+        binding.channelGroups.setOnCheckedStateChangeListener { group, checked ->
+            if (!rebuildingGroups) {
+                val key = checked.firstOrNull()?.let { group.findViewById<Chip>(it)?.tag as? String }
+                    ?: return@setOnCheckedStateChangeListener
+                selectedGroup = key
+                viewLifecycleOwner.lifecycleScope.launch { showFeed(restoreScrollState = false) }
             }
         }
 
         viewModel.groups.observe(viewLifecycleOwner) {
-            lifecycleScope.launch { initChannelGroups() }
+            initChannelGroups()
+            viewLifecycleOwner.lifecycleScope.launch { showFeed(restoreScrollState = false) }
         }
 
         binding.editGroups.setOnClickListener {
@@ -197,14 +194,20 @@ class SubscriptionsFragment : DynamicLayoutManagerFragment(R.layout.fragment_sub
             }
         })
 
-        lifecycleScope.launch(Dispatchers.IO) {
-            val groups = try {
-                UserDataRepositoryHelper.userDataRepository.getSubscriptionGroups()
-            } catch (e: Exception) {
-                context?.toastFromMainDispatcher(e.message.orEmpty())
-                return@launch
+        viewModel.fetchSubscriptions(requireContext())
+        viewLifecycleOwner.lifecycleScope.launch {
+            Database.subscriptionGroupsDao().observeAll().collect { viewModel.groups.value = it }
+        }
+        viewModel.subscriptions.observe(viewLifecycleOwner) { updateUngroupedVisibility() }
+        viewModel.feedError.observe(viewLifecycleOwner) { failed ->
+            if (failed == true) {
+                binding.subProgress.isGone = true
+                binding.subRefresh.isRefreshing = false
+                if (viewModel.videoFeed.value.isNullOrEmpty()) {
+                    binding.emptyFeedMessage.setText(R.string.server_error)
+                    binding.emptyFeed.isVisible = true
+                }
             }
-            viewModel.groups.postValue(groups)
         }
     }
 
@@ -244,9 +247,9 @@ class SubscriptionsFragment : DynamicLayoutManagerFragment(R.layout.fragment_sub
         _binding = null
     }
 
-    private suspend fun playByGroup(groupIndex: Int) {
+    private suspend fun playByGroup(groupKey: String) {
         val streams = viewModel.videoFeed.value.orEmpty()
-            .filterByGroup(groupIndex)
+            .filterByGroup(groupKey)
             .let {
                 DatabaseHelper.filterByStreamTypeAndWatchPosition(it, hideWatched, showUpcoming)
             }
@@ -265,66 +268,75 @@ class SubscriptionsFragment : DynamicLayoutManagerFragment(R.layout.fragment_sub
         )
     }
 
-    private fun filterUngroupedStreamItems(streamItems: List<StreamItem>): List<StreamItem> {
-        val groups = viewModel.groups.value.orEmpty()
+    private fun channelIdsInGroups() = viewModel.groups.value.orEmpty()
+        .flatMap { it.channels }.map { it.toID() }.filter { it.isNotBlank() }.toSet()
 
-        return streamItems.filter { streamItem ->
-            groups.none { it.channels.contains(streamItem.uploaderUrl.orEmpty().toID()) }
-        }
+    private fun ungroupedChannelIds(): List<String> {
+        val grouped = channelIdsInGroups()
+        return viewModel.subscriptions.value.orEmpty().map { it.url.toID() }.filterNot(grouped::contains)
+    }
+
+    private fun filterUngroupedStreamItems(streamItems: List<StreamItem>): List<StreamItem> {
+        val grouped = channelIdsInGroups()
+        return streamItems.filter { it.uploaderUrl.orEmpty().toID() !in grouped }
+    }
+
+    private fun updateUngroupedVisibility() {
+        val binding = _binding ?: return
+        binding.chipUngrouped.isVisible = viewModel.groups.value.orEmpty().isNotEmpty() &&
+            (selectedGroup == GROUP_UNGROUPED || ungroupedChannelIds().isNotEmpty() ||
+                filterUngroupedStreamItems(viewModel.videoFeed.value.orEmpty()).isNotEmpty())
     }
 
     @SuppressLint("InflateParams")
     private fun initChannelGroups() {
         val binding = _binding ?: return
-
         val groups = viewModel.groups.value.orEmpty()
-
-        binding.chipAll.isChecked = selectedFilterGroup == FILTER_GROUP_ALL
-        binding.chipAll.setOnLongClickListener {
-            lifecycleScope.launch { playByGroup(FILTER_GROUP_ALL) }
-            true
+        if (PreferenceHelper.getString(PreferenceKeys.SELECTED_CHANNEL_GROUP_KEY, "").isEmpty()) {
+            val legacy = PreferenceHelper.getInt(PreferenceKeys.SELECTED_CHANNEL_GROUP, -1)
+            selectedGroup = if (legacy == -2) GROUP_UNGROUPED
+                else groups.getOrNull(legacy)?.let { keyFor(it.name) } ?: GROUP_ALL
         }
-
-        binding.chipUngrouped.isChecked = selectedFilterGroup == FILTER_GROUP_UNGROUPED
-        binding.chipUngrouped.setOnLongClickListener {
-            lifecycleScope.launch { playByGroup(FILTER_GROUP_UNGROUPED) }
-            true
-        }
-
-        binding.channelGroups.removeAllViews()
-        binding.channelGroups.addView(binding.chipAll)
-
-        groups.forEachIndexed { index, group ->
-            val chip = layoutInflater.inflate(R.layout.filter_chip, null) as Chip
-            chip.apply {
-                id = View.generateViewId()
-                isCheckable = true
-                text = group.name
-                setOnLongClickListener {
-                    // the index must be increased by one to skip the "all channels" group button
-                    lifecycleScope.launch { playByGroup(index + 1) }
+        rebuildingGroups = true
+        try {
+            binding.channelGroups.removeAllViews()
+            val chips = mutableMapOf<String, Chip>()
+            fun addChip(key: String, chip: Chip) {
+                chip.tag = key
+                chip.setOnLongClickListener {
+                    viewLifecycleOwner.lifecycleScope.launch { playByGroup(key) }
                     true
                 }
+                binding.channelGroups.addView(chip)
+                chips[key] = chip
             }
-
-            binding.channelGroups.addView(chip)
-
-            if (index == selectedFilterGroup) binding.channelGroups.check(chip.id)
+            addChip(GROUP_ALL, binding.chipAll)
+            for (group in groups) {
+                val chip = layoutInflater.inflate(R.layout.filter_chip, binding.channelGroups, false) as Chip
+                chip.id = View.generateViewId()
+                chip.isCheckable = true
+                chip.text = group.name
+                addChip(keyFor(group.name), chip)
+            }
+            addChip(GROUP_UNGROUPED, binding.chipUngrouped)
+            updateUngroupedVisibility()
+            val checked = chips[selectedGroup]?.takeIf { it.isVisible }
+            if (checked == null) selectedGroup = GROUP_ALL
+            binding.channelGroups.check((checked ?: binding.chipAll).id)
+        } finally {
+            rebuildingGroups = false
         }
-
-        // only show "ungrouped" chip category if there actually are any ungrouped subscriptions
-        // not sure if it's worth loading them here
-        binding.channelGroups.addView(binding.chipUngrouped)
     }
 
-    private fun List<StreamItem>.filterByGroup(groupIndex: Int): List<StreamItem> {
-        if (groupIndex == FILTER_GROUP_ALL) return this
-        if (groupIndex == FILTER_GROUP_UNGROUPED) return filterUngroupedStreamItems(this)
+    private fun groupChannels(key: String): Set<String> = viewModel.groups.value.orEmpty()
+        .firstOrNull { keyFor(it.name) == key }?.channels.orEmpty().map { it.toID() }.toSet()
 
-        val group = viewModel.groups.value?.getOrNull(groupIndex)
-        return filter {
-            val channelId = it.uploaderUrl.orEmpty().toID()
-            group?.channels?.contains(channelId) != false
+    private fun List<StreamItem>.filterByGroup(key: String): List<StreamItem> = when (key) {
+        GROUP_ALL -> this
+        GROUP_UNGROUPED -> filterUngroupedStreamItems(this)
+        else -> {
+            val channels = groupChannels(key)
+            filter { it.uploaderUrl.orEmpty().toID() in channels }
         }
     }
 
@@ -342,11 +354,14 @@ class SubscriptionsFragment : DynamicLayoutManagerFragment(R.layout.fragment_sub
         val binding = _binding ?: return
         val videoFeed = viewModel.videoFeed.value ?: return
 
+        val groupKey = selectedGroup
         val feed = videoFeed
-            .filterByGroup(selectedFilterGroup)
+            .filterByGroup(groupKey)
             .let {
                 DatabaseHelper.filterByStreamTypeAndWatchPosition(it, hideWatched, showUpcoming)
             }
+
+        if (_binding !== binding || groupKey != selectedGroup) return
 
         val sortedFeed = feed
             .sortedBySelectedOrder()
@@ -367,15 +382,20 @@ class SubscriptionsFragment : DynamicLayoutManagerFragment(R.layout.fragment_sub
 
         binding.subProgress.isGone = true
 
-        val notLoaded = viewModel.videoFeed.value.isNullOrEmpty()
+        val notLoaded = sortedFeed.isEmpty()
         binding.subFeed.isGone = notLoaded
         binding.emptyFeed.isVisible = notLoaded
+        if (notLoaded) {
+            val selectedIsEmpty = selectedGroup != GROUP_ALL && selectedGroup != GROUP_UNGROUPED && groupChannels(selectedGroup).isEmpty()
+            binding.emptyFeedMessage.setText(if (selectedIsEmpty) R.string.subscription_group_empty else R.string.emptyList)
+        }
 
         binding.toggleSubs.text = getString(R.string.subscriptions)
 
         binding.subRefresh.isRefreshing = false
 
         feedAdapter.submitList(sortedFeed) {
+            val binding = _binding ?: return@submitList
             if (restoreScrollState) {
                 // manually restore the previous feed state
                 binding.subFeed.layoutManager?.onRestoreInstanceState(viewModel.subFeedRecyclerViewState)
@@ -396,7 +416,8 @@ class SubscriptionsFragment : DynamicLayoutManagerFragment(R.layout.fragment_sub
     }
 
     companion object {
-        private const val FILTER_GROUP_UNGROUPED = -2
-        private const val FILTER_GROUP_ALL = -1
+        private const val GROUP_UNGROUPED = "ungrouped"
+        private const val GROUP_ALL = "all"
+        private fun keyFor(name: String) = "group:" + name
     }
 }

@@ -11,5 +11,8 @@ data class PlayerData(
     val keepQueue: Boolean = false,
     val timestamp: Long = 0,
     val isOffline: Boolean = false,
-    val offlineQueueIds: List<String> = emptyList(),
+    val playlistNextPage: String? = null,
+    val queueName: String? = null,
+    val resumePositionMs: Long? = null,
+    val resumePaused: Boolean = false,
 ) : Parcelable

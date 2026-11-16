@@ -1,5 +1,6 @@
 package com.github.libretube.helpers
 
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -90,22 +91,10 @@ object ImageHelper {
      */
     fun loadImage(url: String?, target: ImageView, whiteBackground: Boolean = false) {
         if (url.isNullOrEmpty()) return
-
-        // clear image to avoid loading issues at fast scrolling
         target.setImageBitmap(null)
-
-        // only load online images if the data saver mode is disabled
-        if (DataSaverMode.isEnabled(target.context)) {
-            if (url.startsWith(HTTP_SCHEME) && !isCached(url)) return
-        }
-
+        if (DataSaverMode.isEnabled(target.context) && url.startsWith(HTTP_SCHEME) && !isCached(url)) return
         target.load(url) {
-            listener(
-                onSuccess = { _, _ ->
-                    // set the background to white for transparent images
-                    if (whiteBackground) target.setBackgroundColor(Color.WHITE)
-                }
-            )
+            listener(onSuccess = { _, _ -> if (whiteBackground) target.setBackgroundColor(Color.WHITE) })
         }
     }
 

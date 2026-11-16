@@ -195,14 +195,8 @@ class SabrMediaPeriod(
         return positionUs
     }
 
-    override fun getAdjustedSeekPositionUs(positionUs: Long, seekParameters: SeekParameters): Long {
-        for (sampleStream in sampleStreams) {
-            if (sampleStream.primaryTrackType == C.TRACK_TYPE_VIDEO) {
-                return sampleStream.getAdjustedSeekPositionUs(positionUs, seekParameters)
-            }
-        }
-        return positionUs
-    }
+    override fun getAdjustedSeekPositionUs(positionUs: Long, seekParameters: SeekParameters): Long =
+        sampleStreams.firstOrNull()?.getAdjustedSeekPositionUs(positionUs, seekParameters) ?: positionUs
 
     override fun onContinueLoadingRequested(sampleStream: ChunkSampleStream<SabrChunkSource>) {
         callback!!.onContinueLoadingRequested(this)

@@ -43,20 +43,12 @@ class SabrManifest(
         Base64.decode(streams.videoPlaybackUstreamerConfig!!, Base64.URL_SAFE),
         streams.duration * 1000,
     ) {
-        val videoAdaptionSets = streams.videoStreams.groupBy { it.mimeType }
-            .map { (_, streams) ->
-                AdaptationSet(C.TRACK_TYPE_VIDEO, streams.map {
-                    Representation(it)
-                })
-            };
-
-        val audioAdaptationSets = streams.audioStreams.groupBy { it.mimeType + it.audioTrackId }
+        adaptationSets = streams.audioStreams.groupBy { it.mimeType + it.audioTrackId }
             .map { (_, streams) ->
                 AdaptationSet(C.TRACK_TYPE_AUDIO, streams.map {
                     Representation(it)
                 })
             }
-        adaptationSets = videoAdaptionSets + audioAdaptationSets
     }
 
     override fun copy(streamKeys: List<StreamKey>): SabrManifest {

@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -35,7 +34,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.github.libretube.BuildConfig
 import com.github.libretube.NavDirections
 import com.github.libretube.R
-import com.github.libretube.compat.PictureInPictureCompat
 import com.github.libretube.constants.IntentData
 import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.databinding.ActivityMainBinding
@@ -108,15 +106,8 @@ class MainActivity : AbstractPlayerHostActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
-        super.onCreate(savedInstanceState)
-
-        // show welcome activity on first app startup (or after the update to prospectively v32)
-        if (!PreferenceHelper.getBoolean(PreferenceKeys.WELCOME_ACTIVITY_FINISHED, false)) {
-            val welcomeIntent = Intent(this, WelcomeActivity::class.java)
-            startActivity(welcomeIntent)
-            finish()
-            return
-        }
+        // Previous builds can have a video fragment in activity state.
+        super.onCreate(savedInstanceState?.takeIf { it.getInt("playerStateVersion") == 1 })
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -125,7 +116,7 @@ class MainActivity : AbstractPlayerHostActivity() {
         // see https://developer.android.com/develop/ui/views/layout/edge-to-edge
         binding.root.onSystemInsets { _, systemBarInsets ->
             // there's a possibility that the paddings are not being applied properly when
-            // exiting from player's fullscreen. Adding OnGlobalLayoutListener serves as
+            // while the player is expanding. Adding OnGlobalLayoutListener serves as
             // a workaround for this issue
             binding.root.viewTreeObserver.addOnGlobalLayoutListener(object :
                 ViewTreeObserver.OnGlobalLayoutListener {
@@ -224,8 +215,7 @@ class MainActivity : AbstractPlayerHostActivity() {
         setupSubscriptionsBadge()
 
         loadIntentData()
-
-        showUserInfoDialogIfNeeded()
+        if (!intent.hasExtra(IntentData.videoId) && !intent.getBooleanExtra(IntentData.maximizePlayer, false)) restoreAudioQueue()
     }
 
     /**
@@ -493,26 +483,30 @@ class MainActivity : AbstractPlayerHostActivity() {
         if (::searchView.isInitialized) searchView.setQuery(query, submit)
     }
 
-    private fun loadIntentData() {
-        // If activity is running in PiP mode, then start it in front.
-        if (PictureInPictureCompat.isInPictureInPictureMode(this)) {
-            val nIntent = Intent(this, MainActivity::class.java)
-            nIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            startActivity(nIntent)
-        }
-
-        if (intent?.getBooleanExtra(IntentData.maximizePlayer, false) == true) {
-            // attempt to open the current video player fragment
-            if (intent?.getBooleanExtra(IntentData.audioOnly, false) == false) {
-                runOnPlayerFragment { binding.playerMotionLayout.transitionToStart(); true }
-                return
+    private fun restoreAudioQueue() {
+        lifecycleScope.launch {
+            val saved = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                com.github.libretube.util.PlaybackStateStore.load(this@MainActivity)
+            } ?: return@launch
+            if (isFinishing) return@launch
+            if (com.github.libretube.services.AudioPlaybackService.active) {
+                if (com.github.libretube.util.PlayingQueue.getCurrent() != null && !runOnAudioPlayerFragment { true }) {
+                    NavigationHelper.openAudioPlayerFragment(this@MainActivity, minimizeByDefault = true)
+                }
+                return@launch
             }
+            com.github.libretube.util.PlayingQueue.setStreams(saved.tracks)
+            NavigationHelper.navigateVideo(this@MainActivity, PlayerData(saved.trackId, keepQueue = true,
+                isOffline = saved.localOnly, queueName = saved.queueName, resumePositionMs = saved.positionMs,
+                playlistId = saved.playlistId, playlistNextPage = saved.playlistNextPage, resumePaused = true))
+        }
+    }
 
-            // if it's an audio only session, attempt to maximize the audio player or create a new one
+    private fun loadIntentData() {
+        if (intent?.getBooleanExtra(IntentData.maximizePlayer, false) == true) {
             if (runOnAudioPlayerFragment { binding.playerMotionLayout.transitionToStart(); true }) return
 
-            val offlinePlayer = intent!!.getBooleanExtra(IntentData.offlinePlayer, false)
-            NavigationHelper.openAudioPlayerFragment(this, offlinePlayer = offlinePlayer)
+            NavigationHelper.openAudioPlayerFragment(this)
             return
         }
 
@@ -624,30 +618,15 @@ class MainActivity : AbstractPlayerHostActivity() {
         return item.onNavDestinationSelected(navController)
     }
 
-    override fun onUserLeaveHint() {
-        super.onUserLeaveHint()
-
-        runOnPlayerFragment {
-            onUserLeaveHint()
-            true
-        }
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt("playerStateVersion", 1)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         this.intent = intent
         loadIntentData()
-    }
-
-    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-        // don't forward key events to the player while the search text input is used
-        if (searchItem.isActionViewExpanded) return false
-
-        if (runOnPlayerFragment { this@runOnPlayerFragment.onKeyUp(keyCode, event) }) {
-            return true
-        }
-
-        return super.onKeyUp(keyCode, event)
     }
 
     fun startPlaylistExport(
@@ -662,33 +641,6 @@ class MainActivity : AbstractPlayerHostActivity() {
         val fileName =
             BackupRestoreSettings.getExportFileName(this, format, playlistName, includeTimestamp)
         createPlaylistsFile.launch(fileName)
-    }
-
-    private fun showUserInfoDialogIfNeeded() {
-        // don't show the update information dialog for debug builds
-        if (BuildConfig.DEBUG) return
-
-        val lastShownVersionCode =
-            PreferenceHelper.getInt(PreferenceKeys.LAST_SHOWN_INFO_MESSAGE_VERSION_CODE, -1)
-
-        // mapping of version code to info message
-        val infoMessages = emptyList<Pair<Int, String>>()
-
-        val message =
-            infoMessages.lastOrNull { (versionCode, _) -> versionCode > lastShownVersionCode }?.second
-                ?: return
-
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.update_information)
-            .setMessage(message)
-            .setNegativeButton(R.string.okay, null)
-            .setPositiveButton(R.string.never_show_again) { _, _ ->
-                PreferenceHelper.putInt(
-                    PreferenceKeys.LAST_SHOWN_INFO_MESSAGE_VERSION_CODE,
-                    BuildConfig.VERSION_CODE
-                )
-            }
-            .show()
     }
 
     override fun minimizePlayerContainerLayout() {

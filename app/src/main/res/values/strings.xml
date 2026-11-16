@@ -582,4 +582,8 @@
     <string name="audio_not_downloaded">Audio has not been downloaded</string>
     <string name="license_and_source">License and source code</string>
     <string name="fork_license_notice">Modified from LibreTube by the LibreTube contributors. Licensed under GNU GPL version 3 or later. This software comes with no warranty. Source code and modification history: https://github.com/Shjdness/LibreTube/tree/custom</string>
+    <string name="audio_stream_unavailable">No audio stream available</string>
+    <string name="audio_quality_settings_summary">Audio quality on Wi-Fi and mobile data</string>
+    <string name="track_options">Track options</string>
+    <string name="subscription_group_empty">There are no channels in this group</string>
 </resources>

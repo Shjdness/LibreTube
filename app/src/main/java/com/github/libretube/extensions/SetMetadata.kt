@@ -16,7 +16,7 @@ import com.github.libretube.db.obj.DownloadWithItems
 @OptIn(UnstableApi::class)
 fun MediaItem.Builder.setMetadata(streams: Streams, videoId: String) = apply {
     // Avoid reaching the max parcelable size of 1MB for binder transactions.
-    val clearedStreams = streams.copy(audioStreams = emptyList(), videoStreams = emptyList())
+    val clearedStreams = streams.copy(audioStreams = emptyList())
     val extras = bundleOf(
         MediaMetadataCompat.METADATA_KEY_TITLE to streams.title,
         MediaMetadataCompat.METADATA_KEY_ARTIST to streams.uploader,

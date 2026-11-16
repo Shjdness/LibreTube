@@ -1,8 +1,8 @@
 package com.github.libretube.ui.viewholders
 
 import androidx.recyclerview.widget.RecyclerView
-import com.github.libretube.databinding.VideoRowBinding
+import com.github.libretube.databinding.PlaylistTrackRowBinding
 
 class PlaylistViewHolder(
-    val binding: VideoRowBinding
+    val binding: PlaylistTrackRowBinding
 ) : RecyclerView.ViewHolder(binding.root)

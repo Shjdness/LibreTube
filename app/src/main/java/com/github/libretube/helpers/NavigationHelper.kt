@@ -12,7 +12,6 @@ import androidx.fragment.app.replace
 import com.github.libretube.NavDirections
 import com.github.libretube.R
 import com.github.libretube.constants.IntentData
-import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.enums.PlaylistType
 import com.github.libretube.db.obj.DownloadWithItems
 import com.github.libretube.extensions.toID
@@ -23,7 +22,6 @@ import com.github.libretube.ui.activities.MainActivity
 import com.github.libretube.ui.activities.ZoomableImageActivity
 import com.github.libretube.ui.base.BaseActivity
 import com.github.libretube.ui.fragments.AudioPlayerFragment
-import com.github.libretube.ui.fragments.PlayerFragment
 import com.github.libretube.util.PlayingQueue
 
 object NavigationHelper {
@@ -35,106 +33,30 @@ object NavigationHelper {
         activity.navController.navigate(NavDirections.openChannel(ChannelIdentifier.Id(channelUrlOrId.toID())))
         try {
             // minimize player if currently expanded
-            activity.runOnPlayerFragment {
-                binding.playerMotionLayout.transitionToEnd()
-                true
-            }
             activity.minimizePlayerContainerLayout()
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    fun navigateDownloadedAudio(context: Context, videoId: String, queue: List<DownloadWithItems>) {
-        val ids = queue.filter { it.finishedAudio != null }.map { it.download.videoId }.distinct()
-        if (videoId !in ids) return
-        navigateVideo(
-            context,
-            PlayerData(videoId, isOffline = true, offlineQueueIds = ids),
-            audioOnlyPlayerRequested = true
-        )
+    fun navigateDownloadedAudio(context: Context, videoId: String, queue: List<DownloadWithItems>, queueName: String? = null) {
+        val downloaded = queue.filter { it.finishedAudio != null }.map { it.download.toStreamItem() }
+        if (downloaded.none { it.url?.toID() == videoId }) return
+        PlayingQueue.setStreams(downloaded)
+        navigateVideo(context, PlayerData(videoId, keepQueue = true, isOffline = true, queueName = queueName))
     }
 
-    /**
-     * Navigate to the given video using the other provided parameters as well
-     * If the audio only mode is enabled, play it in the background, else as a normal video
-     */
     @SuppressLint("UnsafeOptInUsageError")
-    fun navigateVideo(
-        context: Context,
-        playerData: PlayerData,
-        alreadyStarted: Boolean = false,
-        forceVideo: Boolean = false,
-        audioOnlyPlayerRequested: Boolean = false,
-    ) {
-        // attempt to attach to the current media session first by using the corresponding
-        // video/audio player instance
+    fun navigateVideo(context: Context, playerData: PlayerData) {
         val activity = ContextHelper.unwrapActivity<AbstractPlayerHostActivity>(context)
-        val attachedToRunningPlayer = activity.runOnPlayerFragment {
-            // can only continue using player if in same mode (online/offline)
-            // otherwise, recreate the player
-            if (playerData.isOffline != isOffline || playerData.videoId == null) return@runOnPlayerFragment false
-
-            if (playerData.offlineQueueIds.isNotEmpty()) return@runOnPlayerFragment false
-
-            try {
-                if (!playerData.keepQueue) PlayingQueue.clearAfterCurrent()
-                this.playVideo(playerData.videoId.toID())
-
-                if (audioOnlyPlayerRequested) {
-                    // switch to audio only player
-                    this.switchToAudioMode()
-                } else {
-                    // maximize player
-                    this.binding.playerMotionLayout.transitionToStart()
-                }
-
-                true
-            } catch (e: Exception) {
-                this.onDestroy()
-                false
-            }
-        }
-        if (attachedToRunningPlayer) return
-
-        val audioOnlyMode = PreferenceHelper.getBoolean(PreferenceKeys.AUDIO_ONLY_MODE, false)
-        val attachedToRunningAudioPlayer = activity.runOnAudioPlayerFragment {
-            // can only continue using player if in same mode (online/offline)
-            // otherwise, recreate the player
-            if (playerData.isOffline != isOffline || playerData.videoId == null) return@runOnAudioPlayerFragment false
-
-            if (playerData.offlineQueueIds.isNotEmpty()) {
-                if (!startOfflineQueue(playerData)) return@runOnAudioPlayerFragment false
-            } else {
-                if (!playerData.keepQueue) PlayingQueue.clearAfterCurrent()
-                this.playNextVideo(playerData.videoId.toID())
-            }
-
-            if (!audioOnlyPlayerRequested && !audioOnlyMode) {
-                // switch to video only player
-                this.switchToVideoMode(playerData.videoId.toID())
-            } else {
-                // maximize player
-                this.binding.playerMotionLayout.transitionToStart()
-            }
-
+        val reused = activity.runOnAudioPlayerFragment {
+            if (!startQueue(playerData)) return@runOnAudioPlayerFragment false
+            binding.playerMotionLayout.transitionToStart()
             true
         }
-        if (attachedToRunningAudioPlayer) return
+        if (reused) return
 
-        if (audioOnlyPlayerRequested || (audioOnlyMode && !forceVideo)) {
-            // in contrast to the video player, the audio player doesn't start a media service on
-            // its own!
-            BackgroundHelper.playOnBackground(context, playerData)
-
-            openAudioPlayerFragment(context, offlinePlayer = playerData.isOffline, minimizeByDefault = true)
-        } else {
-            openVideoPlayerFragment(
-                context,
-                playerData,
-                alreadyStarted
-            )
-        }
+        openAudioPlayerFragment(context, minimizeByDefault = true, initialTrack = playerData)
     }
 
     fun navigatePlaylist(context: Context, playlistUrlOrId: String?, playlistType: PlaylistType) {
@@ -151,35 +73,16 @@ object NavigationHelper {
      */
     fun openAudioPlayerFragment(
         context: Context,
-        offlinePlayer: Boolean = false,
-        minimizeByDefault: Boolean = false
+        minimizeByDefault: Boolean = false,
+        initialTrack: PlayerData? = null
     ) {
         val activity = ContextHelper.unwrapActivity<BaseActivity>(context)
         activity.supportFragmentManager.commitNow {
             val args = bundleOf(
                 IntentData.minimizeByDefault to minimizeByDefault,
-                IntentData.offlinePlayer to offlinePlayer
+                IntentData.playerData to initialTrack
             )
             replace<AudioPlayerFragment>(R.id.container, args = args)
-        }
-    }
-
-    /**
-     * Starts the video player fragment for an already existing med
-     */
-    fun openVideoPlayerFragment(
-        context: Context,
-        playerData: PlayerData,
-        alreadyStarted: Boolean = false,
-    ) {
-        val activity = ContextHelper.unwrapActivity<BaseActivity>(context)
-
-        val bundle = bundleOf(
-            IntentData.playerData to playerData,
-            IntentData.alreadyStarted to alreadyStarted,
-        )
-        activity.supportFragmentManager.commitNow {
-            replace<PlayerFragment>(R.id.container, args = bundle)
         }
     }
 

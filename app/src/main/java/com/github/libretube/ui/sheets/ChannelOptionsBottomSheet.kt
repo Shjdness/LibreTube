@@ -9,7 +9,6 @@ import com.github.libretube.enums.ShareObjectType
 import com.github.libretube.enums.menuoption.ChannelBottomSheetItem
 import com.github.libretube.extensions.TAG
 import com.github.libretube.extensions.toID
-import com.github.libretube.helpers.BackgroundHelper
 import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.obj.ChannelIdentifier
 import com.github.libretube.obj.ShareData
@@ -99,7 +98,7 @@ class ChannelOptionsBottomSheet : BaseBottomSheet() {
                             )
                         }
                         channel.relatedStreams.firstOrNull()?.url?.toID()?.let {
-                            BackgroundHelper.playOnBackground(
+                            NavigationHelper.navigateVideo(
                                 requireContext(),
                                 PlayerData(
                                     videoId = it,

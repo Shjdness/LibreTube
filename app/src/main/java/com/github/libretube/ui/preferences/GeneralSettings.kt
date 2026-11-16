@@ -94,9 +94,6 @@ class GeneralSettings : BasePreferenceFragment() {
                 // clear default preferences
                 PreferenceHelper.clearPreferences()
 
-                // clear login token
-                PreferenceHelper.setToken("")
-
                 ActivityCompat.recreate(requireActivity())
             }
             .show()

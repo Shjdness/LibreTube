@@ -564,4 +564,8 @@
     <string name="audio_not_downloaded">此音频尚未下载</string>
     <string name="license_and_source">许可证与源代码</string>
     <string name="fork_license_notice">本版本基于 LibreTube 贡献者的作品修改，按 GNU GPL 第 3 版或更高版本授权。本软件不提供担保。源代码与修改记录：https://github.com/Shjdness/LibreTube/tree/custom</string>
+    <string name="audio_stream_unavailable">没有可播放的音轨</string>
+    <string name="audio_quality_settings_summary">设置 Wi-Fi 和移动数据下的音质</string>
+    <string name="track_options">音频选项</string>
+    <string name="subscription_group_empty">此分组还没有频道</string>
 </resources>

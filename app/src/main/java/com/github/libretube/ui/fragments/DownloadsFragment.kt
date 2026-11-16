@@ -174,7 +174,7 @@ class DownloadsFragment : DynamicLayoutManagerFragment(R.layout.fragment_downloa
             render()
         }
         audioAdapter = DownloadsAdapter(requireContext(), ::toggleDownload) { item ->
-            NavigationHelper.navigateDownloadedAudio(requireContext(), item.download.videoId, audioAdapter.currentList)
+            NavigationHelper.navigateDownloadedAudio(requireContext(), item.download.videoId, fullChannelQueue(item.channelKey), channelName(item))
         }
         folderAdapter = DownloadFolderAdapter { key ->
             channel = key
@@ -198,9 +198,9 @@ class DownloadsFragment : DynamicLayoutManagerFragment(R.layout.fragment_downloa
         }
         binding.deleteAll.setOnClickListener { showDeleteAllDialog() }
         binding.shuffleAll.setOnClickListener {
-            val queue = audioAdapter.currentList.filter { it.finishedAudio != null }.shuffled()
+            val queue = shelfItems().filter { it.finishedAudio != null }.shuffled()
             val first = queue.firstOrNull() ?: return@setOnClickListener
-            NavigationHelper.navigateDownloadedAudio(requireContext(), first.download.videoId, queue)
+            NavigationHelper.navigateDownloadedAudio(requireContext(), first.download.videoId, queue, channel?.let { channelName(first) })
         }
         playerModel.isMiniPlayerVisible.observe(viewLifecycleOwner) { visible ->
             binding.shuffleAll.updateLayoutParams<MarginLayoutParams> {
@@ -248,6 +248,10 @@ class DownloadsFragment : DynamicLayoutManagerFragment(R.layout.fragment_downloa
         binding.shuffleAll.isVisible = !showFolders && displayed.any { it.finishedAudio != null }
         binding.resumeAll.isVisible = items.any { it.audioItem?.isFinished == false }
     }
+
+    private fun shelfItems() = sortDownloads(items.filter { channel == null || it.channelKey == channel }, DownloadSortingOrder.entries[sortIndex])
+
+    private fun fullChannelQueue(key: String) = sortDownloads(items.filter { it.channelKey == key }, DownloadSortingOrder.entries[sortIndex])
 
     private fun channelName(item: DownloadWithItems) =
         item.download.uploader.ifBlank { getString(R.string.unknown) }

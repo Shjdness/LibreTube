@@ -5,12 +5,16 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import kotlinx.coroutines.flow.Flow
 import com.github.libretube.db.obj.SubscriptionGroup
 
 @Dao()
 interface SubscriptionGroupsDao {
     @Query("SELECT * FROM subscriptionGroups ORDER BY `index` ASC")
     suspend fun getAll(): List<SubscriptionGroup>
+
+    @Query("SELECT * FROM subscriptionGroups ORDER BY `index` ASC")
+    fun observeAll(): Flow<List<SubscriptionGroup>>
 
     @Query("SELECT * FROM subscriptionGroups WHERE name = :name")
     suspend fun getByName(name: String): SubscriptionGroup?

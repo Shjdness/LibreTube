@@ -27,12 +27,6 @@ open class ExpandedBottomSheet(@LayoutRes layoutResId: Int) :
 
     fun show(fragmentManager: FragmentManager) = show(fragmentManager, null)
 
-    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode)
-        // ensure that the sheet doesn't hide parts of the video
-        dialog?.dismiss()
-    }
-
     fun expand(collapse: Boolean = false) {
         bottomSheet?.let { fl ->
             val bottomSheetInfoBehavior = BottomSheetBehavior.from(fl)

@@ -3,16 +3,19 @@ package com.github.libretube.util
 import android.net.Uri
 import androidx.annotation.OptIn
 import androidx.media3.common.Format
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.hls.playlist.HlsMediaPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist.Rendition
+import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist.Variant
 import androidx.media3.exoplayer.hls.playlist.HlsPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParser
 import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParserFactory
 import androidx.media3.exoplayer.upstream.ParsingLoadable
 import com.github.libretube.helpers.PlayerHelper
 import java.io.InputStream
+import java.io.IOException
 
 /**
  * A YouTube HLS playlist parser which adds role flags to audio formats with track types.
@@ -88,20 +91,28 @@ class YoutubeHlsPlaylistParser : ParsingLoadable.Parser<HlsPlaylist> {
             return hlsPlaylist
         }
 
-        val hlsMultivariantPlaylist: HlsMultivariantPlaylist = hlsPlaylist
+        val hlsMultivariantPlaylist = hlsPlaylist
+        val audio = getAudioRenditionsWithTrackTypeSet(hlsMultivariantPlaylist.audios.filter { it.url != null })
+        // Media3 requires a primary variant even for a playlist of separate audio renditions.
+        val audioVariants = audio.map { rendition ->
+            Variant(requireNotNull(rendition.url), rendition.format, null, null, null, null)
+        } + hlsMultivariantPlaylist.variants.filter { variant ->
+            val codecs = variant.format.codecs
+            variant.format.height <= 0 && MimeTypes.getAudioMediaMimeType(codecs) != null &&
+                MimeTypes.getVideoMediaMimeType(codecs) == null
+        }
+        if (audioVariants.isEmpty()) throw IOException("The HLS stream has no separate audio rendition")
 
         return HlsMultivariantPlaylist(
             hlsMultivariantPlaylist.baseUri,
             hlsMultivariantPlaylist.tags,
-            hlsMultivariantPlaylist.variants,
-            hlsMultivariantPlaylist.videos,
-            getAudioRenditionsWithTrackTypeSet(hlsMultivariantPlaylist.audios),
-            hlsMultivariantPlaylist.subtitles,
-            hlsMultivariantPlaylist.closedCaptions,
-            // YouTube HLS playlists have only demuxed formats, so it should be not needed to parse
-            // the muxed format, as it would be always null in this case
-            hlsMultivariantPlaylist.muxedAudioFormat,
-            hlsMultivariantPlaylist.muxedCaptionFormats,
+            audioVariants.distinctBy { it.url },
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            null,
+            emptyList(),
             hlsMultivariantPlaylist.hasIndependentSegments,
             hlsMultivariantPlaylist.variableDefinitions,
             hlsMultivariantPlaylist.sessionKeyDrmInitData

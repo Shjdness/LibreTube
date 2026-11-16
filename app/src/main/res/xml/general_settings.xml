@@ -15,13 +15,6 @@
 
     <PreferenceCategory app:title="@string/customization">
 
-        <SwitchPreferenceCompat
-            android:defaultValue="false"
-            android:icon="@drawable/ic_headphones"
-            android:summary="@string/audio_only_mode_summary"
-            android:title="@string/audio_only_mode"
-            app:key="audio_only_mode" />
-
         <ListPreference
             android:defaultValue="@string/config_default_orientation_pref"
             android:entries="@array/orientation"

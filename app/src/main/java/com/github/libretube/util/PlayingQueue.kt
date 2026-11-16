@@ -10,7 +10,6 @@ import com.github.libretube.extensions.runCatchingIO
 import com.github.libretube.extensions.toID
 import com.github.libretube.helpers.PlayerHelper
 import com.github.libretube.obj.ChannelIdentifier
-import com.github.libretube.util.PlayingQueue.queueMode
 import kotlinx.coroutines.Job
 import java.util.Collections
 
@@ -20,12 +19,6 @@ object PlayingQueue {
     private var currentStream: StreamItem? = null
 
     private val queueJobs = mutableListOf<Job>()
-
-    /**
-     * Current use case of the queue. Do NOT add any offline videos while the [queueMode] is online
-     * or vice versa.
-     */
-    var queueMode: PlayingQueueMode = PlayingQueueMode.ONLINE
 
     // wrapper around PlayerHelper#repeatMode for compatibility
     var repeatMode: Int
@@ -41,7 +34,7 @@ object PlayingQueue {
         queueJobs.clear()
     }
 
-    fun clear() {
+    fun clear() = synchronized(queue) {
         clearJobs()
         queue.clear()
         currentStream = null
@@ -75,7 +68,7 @@ object PlayingQueue {
     fun addAsNext(streamItem: StreamItem) = synchronized(queue) {
         if (currentStream == streamItem) return
         if (queue.contains(streamItem)) queue.remove(streamItem)
-        queue.add(currentIndex() + 1, streamItem)
+        queue.add((currentIndex() + 1).coerceAtMost(queue.size), streamItem)
     }
 
     // return the next item, or if repeating enabled and no video left, the first one of the queue
@@ -96,6 +89,14 @@ object PlayingQueue {
         if (repeatMode == Player.REPEAT_MODE_ALL) return queue.lastOrNull()?.url?.toID()
 
         return null
+    }
+
+    fun adjacentIds(current: String?, reverse: Boolean = false, repeatAll: Boolean = repeatMode == Player.REPEAT_MODE_ALL): List<String> = synchronized(queue) {
+        val ordered = queue.mapNotNull { it.url?.toID() }.let { if (reverse) it.asReversed() else it }
+        val index = ordered.indexOf(current)
+        val remaining = ordered.drop(index + 1)
+        if (index >= 0 && repeatAll) remaining + ordered.take(index)
+        else remaining
     }
 
     fun hasPrev() = getPrev() != null
@@ -127,21 +128,22 @@ object PlayingQueue {
     }
 
     // only returns a copy of the queue, no write access
-    fun getStreams() = queue.toList()
+    fun getStreams() = synchronized(queue) { queue.toList() }
 
     fun setStreams(streams: List<StreamItem>) = synchronized(queue) {
+        clearJobs()
         queue.clear()
-
-        queue.addAll(streams)
+        currentStream = null
+        queue.addAll(streams.distinctBy { it.url?.toID() })
     }
 
     fun remove(index: Int) = synchronized(queue) {
-        queue.removeAt(index)
+        if (index in queue.indices) queue.removeAt(index)
         return@synchronized
     }
 
     fun move(from: Int, to: Int) = synchronized(queue) {
-        queue.move(from, to)
+        if (from in queue.indices && to in queue.indices) queue.move(from, to)
     }
 
     /**
@@ -154,7 +156,7 @@ object PlayingQueue {
         streams: List<StreamItem>, currentStreamItem: StreamItem? = null, isMainList: Boolean = true
     ) = synchronized(queue) {
         if (!isMainList) {
-            add(*streams.toTypedArray())
+            add(*streams.toTypedArray(), skipExisting = true)
             return
         }
         val currentStream = currentStreamItem ?: this.currentStream
@@ -174,13 +176,18 @@ object PlayingQueue {
         }
     }
 
+    fun appendPlaylistPages(playlistId: String, nextPage: String) = runCatchingIO {
+        fetchMoreFromPlaylist(playlistId, nextPage, isMainList = false)
+    }.let { queueJobs.add(it) }
+
     private suspend fun fetchMoreFromPlaylist(
         playlistId: String,
         nextPage: String?,
         isMainList: Boolean
     ) {
         var playlistNextPage = nextPage
-        while (playlistNextPage != null) {
+        val loadedPages = mutableSetOf<String>()
+        while (playlistNextPage != null && loadedPages.add(playlistNextPage)) {
             MediaServiceRepository.instance.getPlaylistNextPage(playlistId, playlistNextPage).run {
                 addToQueueAsync(relatedStreams, isMainList = isMainList)
                 playlistNextPage = this.nextpage
@@ -234,9 +241,4 @@ object PlayingQueue {
             insertChannel(channelId, streamItem)
         }
     }
-}
-
-enum class PlayingQueueMode {
-    ONLINE,
-    OFFLINE
 }

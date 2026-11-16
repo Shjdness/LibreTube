@@ -280,11 +280,12 @@
                     app:icon="@drawable/ic_sleep" />
 
                 <com.google.android.material.button.MaterialButton
+                    android:id="@+id/track_options"
                     style="?materialIconButtonOutlinedStyle"
-                    android:id="@+id/open_video"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    app:icon="@drawable/ic_video" />
+                    android:contentDescription="@string/track_options"
+                    app:icon="@drawable/ic_three_dots" />
 
             </com.google.android.material.button.MaterialButtonGroup>
 

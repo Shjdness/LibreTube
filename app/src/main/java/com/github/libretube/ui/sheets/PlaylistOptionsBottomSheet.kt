@@ -95,15 +95,15 @@ class PlaylistOptionsBottomSheet : BaseBottomSheet() {
                         PlaylistsHelper.getCachedPlaylist(playlistId)
                     }
                 }
-                val ids = playlist?.relatedStreams.orEmpty().mapNotNull { it.url?.toID() }
-                val first = ids.firstOrNull()
-                val localQueue = DownloadHelper.getDownloadedAudioQueue(ids)
-                val localId = localQueue.firstOrNull { it.download.videoId == first }?.download?.videoId
-                    ?: localQueue.firstOrNull()?.download?.videoId?.takeUnless { online }
-                when {
-                    localId != null -> NavigationHelper.navigateDownloadedAudio(context, localId, localQueue)
-                    online && first != null -> BackgroundHelper.playOnBackground(context, PlayerData(first, playlistId = playlistId))
-                    else -> context.toastFromMainDispatcher(R.string.audio_not_downloaded)
+                val queue = playlist?.relatedStreams.orEmpty()
+                val ids = queue.mapNotNull { it.url?.toID() }
+                val first = if (online) ids.firstOrNull() else
+                    DownloadHelper.getDownloadedAudioQueue(ids).firstOrNull()?.download?.videoId
+                if (first == null) context.toastFromMainDispatcher(R.string.audio_not_downloaded)
+                else {
+                    PlayingQueue.setStreams(queue)
+                    NavigationHelper.navigateVideo(context, PlayerData(first, playlistId = playlistId, keepQueue = true,
+                        playlistNextPage = playlist?.nextpage, queueName = playlistName))
                 }
             }
 

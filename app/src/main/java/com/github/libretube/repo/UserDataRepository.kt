@@ -24,15 +24,6 @@ import org.schabi.newpipe.extractor.channel.ChannelInfo
 import java.util.concurrent.atomic.AtomicInteger
 
 interface UserDataRepository {
-    var requiresLogin: Boolean
-
-    suspend fun login(username: String, password: String): String = ""
-    suspend fun register(username: String, password: String): String = ""
-    suspend fun deleteAccount(password: String) = Unit
-
-    suspend fun getOidcLoginUrl(redirectUrl: String): String? = null
-    suspend fun getOidcDeleteAccountUrl(redirectUrl: String): String? = null
-
     suspend fun subscribe(channelId: String, name: String, uploaderAvatar: String?, verified: Boolean)
     suspend fun unsubscribe(channelId: String)
     // TODO: isSubscribed shouldn't be able to return null?

@@ -19,7 +19,6 @@ import com.github.libretube.obj.ShareData
 import com.github.libretube.ui.dialogs.DownloadExportDialog
 import com.github.libretube.ui.dialogs.ShareDialog
 import com.github.libretube.util.PlayingQueue
-import com.github.libretube.util.PlayingQueueMode
 
 @UnstableApi
 class DownloadOptionsBottomSheet : BaseBottomSheet() {
@@ -50,7 +49,7 @@ class DownloadOptionsBottomSheet : BaseBottomSheet() {
         )
 
         val isSelectedVideoCurrentlyPlaying = PlayingQueue.getCurrent()?.url?.toID() == videoId
-        if (!isSelectedVideoCurrentlyPlaying && PlayingQueue.isNotEmpty() && PlayingQueue.queueMode == PlayingQueueMode.OFFLINE) {
+        if (!isSelectedVideoCurrentlyPlaying && PlayingQueue.isNotEmpty()) {
             options += DownloadListMenuOption.PlayNext
             options += DownloadListMenuOption.AddToQueue
         }

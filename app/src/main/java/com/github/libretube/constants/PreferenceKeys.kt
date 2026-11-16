@@ -6,8 +6,6 @@ package com.github.libretube.constants
 object PreferenceKeys {
 
     // Authentications
-    const val TOKEN = "token"
-    const val USERNAME = "username"
 
     // General
     const val LANGUAGE = "language"
@@ -16,7 +14,6 @@ object PreferenceKeys {
     const val ORIENTATION = "orientation"
     const val NAVBAR_ITEMS = "navbar_items"
     const val START_FRAGMENT = "start_fragment"
-    const val AUDIO_ONLY_MODE = "audio_only_mode"
 
     // Appearance
     const val THEME_MODE = "theme_toggle"
@@ -32,43 +29,20 @@ object PreferenceKeys {
 
     // Instance
     const val SYNC_SERVER_TYPE = "sync_server"
-    const val LIBRETUBE_SYNC_SERVER_URL = "libretube_sync_server_url"
-    const val AUTH_INSTANCE = "selectAuthInstance"
-    const val LOGIN_REGISTER = "login_register"
-    const val LOGOUT = "logout"
-    const val DELETE_ACCOUNT = "delete_account"
 
     // Player behavior
-    const val AUTO_FULLSCREEN = "auto_fullscreen"
     const val AUTOPLAY = "autoplay"
     const val PLAYBACK_SPEED = "playback_speed"
-    const val FULLSCREEN_ORIENTATION = "fullscreen_orientation"
-    const val PAUSE_ON_SCREEN_OFF = "pause_screen_off"
     const val WATCH_POSITIONS = "watch_positions"
     const val WATCH_HISTORY_TOGGLE = "watch_history_toggle"
     const val SEARCH_HISTORY_TOGGLE = "search_history_toggle"
-    const val SYSTEM_CAPTION_STYLE = "system_caption_style"
-    const val CAPTION_SETTINGS = "caption_settings"
-    const val RICH_CAPTION_RENDERING = "rich_caption_rendering"
     const val SEEK_INCREMENT = "seek_increment"
-    const val DEFAULT_RESOLUTION = "default_res"
-    const val DEFAULT_RESOLUTION_MOBILE = "default_res_mobile"
     const val BUFFERING_GOAL = "buffering_goal"
     const val PLAYER_AUDIO_QUALITY = "player_audio_quality"
     const val PLAYER_AUDIO_QUALITY_MOBILE = "player_audio_quality_mobile"
-    const val DEFAULT_SUBTITLE = "default_subtitle"
-    const val PLAYER_RESIZE_MODE = "current_player_resize_mode"
     const val PLAYER_SWIPE_CONTROLS = "player_swipe_controls"
-    const val PLAYER_PINCH_CONTROL = "player_pinch_control"
-    const val CAPTIONS_SIZE = "captions_size"
-    const val DOUBLE_TAP_TO_SEEK = "double_tap_seek"
-    const val LONG_PRESS_FAST_FORWARD = "long_press_fast_forward"
-    const val ALTERNATIVE_PIP_CONTROLS = "alternative_pip_controls"
     const val SKIP_SILENCE = "skip_silence"
-    const val AUTOPLAY_COUNTDOWN = "autoplay_countdown"
-    const val AUTO_FULLSCREEN_SHORTS = "auto_fullscreen_shorts"
     const val PLAY_AUTOMATICALLY = "play_automatically"
-    const val FULLSCREEN_GESTURES = "fullscreen_gestures"
     const val SHOW_TIME_LEFT = "show_time_left"
     const val REPEAT_MODE = "repeat_mode"
 
@@ -108,11 +82,11 @@ object PreferenceKeys {
     const val ERROR_LOG = "error_log"
     const val AUTH_PREF_FILE = "auth"
     const val SELECTED_CHANNEL_GROUP = "selected_channel_group"
+    const val SELECTED_CHANNEL_GROUP_KEY = "selected_channel_group_key"
     const val SELECTED_DOWNLOAD_SORT_TYPE = "selected_download_sort_type"
     const val SELECTED_DOWNLOAD_PLAYLIST_SORT_TYPE = "selected_download_playlist_sort_type"
     const val LAST_SHOWN_INFO_MESSAGE_VERSION_CODE = "last_shown_info_message_version"
     const val PREFERENCE_VERSION = "PREFERENCE_VERSION"
-    const val WELCOME_ACTIVITY_FINISHED = "WELCOME_ACTIVITY_FINISHED"
 
     // use the helper methods at PreferenceHelper to access these
     const val LAST_USER_SEEN_FEED_TIME = "last_watched_feed_time"

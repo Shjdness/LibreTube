@@ -13,7 +13,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
-import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.github.libretube.R
 import com.github.libretube.api.PlaylistsHelper
@@ -28,8 +28,6 @@ import com.github.libretube.extensions.ceilHalf
 import com.github.libretube.extensions.dpToPx
 import com.github.libretube.extensions.toastFromMainDispatcher
 import com.github.libretube.helpers.NavBarHelper
-import com.github.libretube.helpers.NetworkHelper
-import com.github.libretube.repo.LocalUserDataRepository
 import kotlin.coroutines.cancellation.CancellationException
 import com.github.libretube.helpers.PreferenceHelper
 import com.github.libretube.repo.UserDataRepositoryHelper
@@ -54,8 +52,8 @@ class LibraryFragment : DynamicLayoutManagerFragment(R.layout.fragment_library) 
     private val playlistBookmarkAdapter = PlaylistBookmarkAdapter()
 
     override fun setLayoutManagers(gridItems: Int) {
-        _binding?.bookmarksRecView?.layoutManager = GridLayoutManager(context, gridItems.ceilHalf())
-        _binding?.playlistRecView?.layoutManager = GridLayoutManager(context, gridItems.ceilHalf())
+        _binding?.bookmarksRecView?.layoutManager = LinearLayoutManager(context)
+        _binding?.playlistRecView?.layoutManager = LinearLayoutManager(context)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -158,9 +156,7 @@ class LibraryFragment : DynamicLayoutManagerFragment(R.layout.fragment_library) 
         lifecycleScope.launch {
             val bookmarks = try {
                 withContext(Dispatchers.IO) {
-                    if (NetworkHelper.isNetworkAvailable(requireContext())) {
-                        UserDataRepositoryHelper.userDataRepository.getPlaylistBookmarks()
-                    } else LocalUserDataRepository().getPlaylistBookmarks()
+                    UserDataRepositoryHelper.userDataRepository.getPlaylistBookmarks()
                 }
             } catch (e: Exception) {
                 context?.toastFromMainDispatcher(e.message.orEmpty())
@@ -170,9 +166,7 @@ class LibraryFragment : DynamicLayoutManagerFragment(R.layout.fragment_library) 
             val binding = _binding ?: return@launch
 
             binding.bookmarksContainer.isVisible = bookmarks.isNotEmpty()
-            if (bookmarks.isNotEmpty()) {
-                playlistBookmarkAdapter.submitList(bookmarks)
-            }
+            playlistBookmarkAdapter.submitList(bookmarks)
         }
     }
 
@@ -189,14 +183,14 @@ class LibraryFragment : DynamicLayoutManagerFragment(R.layout.fragment_library) 
             repeatOnLifecycle(Lifecycle.State.CREATED) {
                 val playlists = try {
                     withContext(Dispatchers.IO) {
-                        if (NetworkHelper.isNetworkAvailable(requireContext())) PlaylistsHelper.getPlaylists()
-                        else PlaylistsHelper.getOfflinePlaylists()
+                        PlaylistsHelper.getPlaylists()
                     }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     Log.w(TAG(), "Could not load playlists from sync server", e)
-                    withContext(Dispatchers.IO) { PlaylistsHelper.getOfflinePlaylists() }
+                    _binding?.playlistRefresh?.isRefreshing = false
+                    return@repeatOnLifecycle
                 }
 
                 val binding = _binding ?: return@repeatOnLifecycle

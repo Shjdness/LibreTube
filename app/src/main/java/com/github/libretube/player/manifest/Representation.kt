@@ -26,16 +26,6 @@ data class Representation(
         .build()
 
     constructor(stream: PipedStream) : this(
-        if (MimeTypes.isVideo(stream.mimeType)) {
-            Format.Builder()
-                .setCodecs(stream.codec)
-                .setContainerMimeType(stream.mimeType)
-                .setSampleMimeType(MimeTypes.getVideoMediaMimeType(stream.codec))
-                .setAverageBitrate(stream.bitrate ?: -1)
-                .setFrameRate(stream.fps?.toFloat() ?: -1f)
-                .setWidth(stream.width ?: -1)
-                .setHeight(stream.height ?: -1).build()
-        } else {
             Format.Builder()
                 .setCodecs(stream.codec)
                 .setContainerMimeType(stream.mimeType)
@@ -55,8 +45,7 @@ data class Representation(
                         else -> 0
                     }
                 )
-                .build()
-        },
+                .build(),
         stream
     )
 }

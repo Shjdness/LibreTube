@@ -9,10 +9,9 @@
         app:title="@string/general" />
 
     <Preference
-        android:icon="@drawable/ic_server"
+        android:icon="@drawable/ic_history"
         app:key="account"
-        app:summary="@string/instance_summary"
-        app:title="@string/account" />
+        app:title="@string/history" />
 
     <Preference
         android:icon="@drawable/ic_color"
@@ -27,10 +26,10 @@
         app:title="@string/player" />
 
     <Preference
-        android:icon="@drawable/ic_movie"
+        android:icon="@drawable/ic_headphones"
         app:key="audio_video"
-        app:summary="@string/audio_video_summary"
-        app:title="@string/audio_video" />
+        app:summary="@string/audio_quality_settings_summary"
+        app:title="@string/playerAudioQuality" />
 
     <Preference
         android:icon="@drawable/ic_notification"
