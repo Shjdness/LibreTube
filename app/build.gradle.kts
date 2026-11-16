@@ -34,7 +34,7 @@ android {
         applicationId = "com.github.libretube"
         minSdk = 26
         targetSdk = 36
-        versionCode = 72
+        versionCode = 73
         versionName = "32.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "app_name", "LibreTube")

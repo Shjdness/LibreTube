@@ -70,9 +70,10 @@ sealed class DownloadSortingOrder(
     drawable = drawableRes,
 ), Parcelable {
     companion object {
-        val entries = listOf(
-            Oldest, Newest, Alphabetic, Duration, Channel, Size
-        ).sortedBy(DownloadSortingOrder::ordinal)
+        // A sort option can be the first class loaded when the download screen opens.
+        val entries by lazy {
+            listOf(Oldest, Newest, Alphabetic, Duration, Channel, Size)
+        }
     }
 
     data object Oldest : DownloadSortingOrder(

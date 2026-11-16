@@ -37,13 +37,10 @@ import com.github.libretube.extensions.getWhileDigit
 import com.github.libretube.extensions.parcelableExtra
 import com.github.libretube.extensions.toLocalDate
 import com.github.libretube.extensions.toastFromMainDispatcher
-import com.github.libretube.extensions.toastFromMainThread
 import com.github.libretube.helpers.DownloadHelper
 import com.github.libretube.helpers.DownloadHelper.getNotificationId
 import com.github.libretube.helpers.ImageHelper
 import com.github.libretube.helpers.NetworkHelper
-import com.github.libretube.helpers.PlayerHelper
-import com.github.libretube.helpers.ProxyHelper
 import com.github.libretube.obj.DownloadStatus
 import com.github.libretube.parcelable.DownloadData
 import com.github.libretube.receivers.NotificationReceiver
@@ -56,7 +53,6 @@ import com.github.libretube.repo.RawByteStreamDownloadProvider
 import com.github.libretube.repo.SabrDownloadProvider
 import com.github.libretube.ui.activities.MainActivity
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.coroutineScope
@@ -125,10 +121,10 @@ class DownloadService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        val downloadId = intent?.getIntExtra("id", -1) ?: -1
         startRequests.incrementAndGet()
         lifecycleScope.launch(coroutineContext) {
             try {
-                val downloadId = intent?.getIntExtra("id", -1) ?: -1
                 when (intent?.action) {
                     ACTION_DOWNLOAD_RESUME -> queueDownload(downloadId)
                     ACTION_DOWNLOAD_PAUSE -> pauseDownload(downloadId)
@@ -136,6 +132,10 @@ class DownloadService : LifecycleService() {
                     ACTION_RESUME_ALL -> resumeAll()
                     else -> intent?.parcelableExtra<DownloadData>(IntentData.downloadData)?.let { enqueueAudio(it.videoId) }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                reportDownloadFailure(e, downloadId)
             } finally {
                 startRequests.decrementAndGet()
                 stopServiceIfDone()
@@ -260,8 +260,10 @@ class DownloadService : LifecycleService() {
     private suspend fun selectFormatAndDownloadFile(item: DownloadItem) {
         val streams = loadStreamsInfo(item.videoId) ?: return
         if (item.type != FileType.AUDIO) return
-        val selectedStream = selectMatchingStream(streams, item) ?: return
         if (!isDownloading(item.id)) return
+        val selectedStream = checkNotNull(selectMatchingStream(streams, item)) {
+            "The selected audio track is unavailable"
+        }
         val url = selectedStream.url
         val provider = if (url?.startsWith("http") == true) {
             RawByteStreamDownloadProvider(url.toHttpUrl())
@@ -295,48 +297,39 @@ class DownloadService : LifecycleService() {
         var numberOfTries = 0
         try {
             while (isDownloading(item.id)) {
-                try {
-                    when (val result = downloadProvider.downloadNextChunk(item, sink)) {
-                        DownloadProgressResult.DownloadComplete -> {
-                            sink.flush()
-                            item.downloadSize = item.path.fileSize()
-                            if (item.downloadSize <= 0L) error("Empty audio download")
-                            Database.downloadDao().updateDownloadItem(item)
-                            setPauseNotification(notificationBuilder, item, true)
-                            _downloadFlow.emit(item.id to DownloadStatus.Completed)
-                            return
-                        }
-                        DownloadProgressResult.Failed -> {
-                            if (numberOfTries < MAX_SEGMENT_RETRIES) {
-                                // try to download segment again after a short delay
-                                delay(200)
-                                numberOfTries++
-                            } else {
-                                setPauseNotification(notificationBuilder, item, false)
-                                pauseDownload(item.id)
-                                break
-                            }
-                        }
-                        is DownloadProgressResult.Progressed -> {
-                            numberOfTries = 0
-                            totalRead += result.bytes
-                            _downloadFlow.emit(
-                                item.id to DownloadStatus.Progress(
-                                    result.bytes,
-                                    totalRead,
-                                    item.downloadSize
-                                )
-                            )
-                            updateNotification(notificationBuilder, item, totalRead.toInt())
+                when (val result = downloadProvider.downloadNextChunk(item, sink)) {
+                    DownloadProgressResult.DownloadComplete -> {
+                        sink.flush()
+                        item.downloadSize = item.path.fileSize()
+                        if (item.downloadSize <= 0L) error("Empty audio download")
+                        Database.downloadDao().updateDownloadItem(item)
+                        setPauseNotification(notificationBuilder, item, true)
+                        _downloadFlow.emit(item.id to DownloadStatus.Completed)
+                        return
+                    }
+                    DownloadProgressResult.Failed -> {
+                        if (numberOfTries < MAX_SEGMENT_RETRIES) {
+                            // try to download segment again after a short delay
+                            delay(200)
+                            numberOfTries++
+                        } else {
+                            setPauseNotification(notificationBuilder, item, false)
+                            pauseDownload(item.id)
+                            break
                         }
                     }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    toastFromMainThread("${getString(R.string.download)}: ${e.message}")
-                    Log.e(this@DownloadService::class.java.name, e.stackTraceToString())
-                    _downloadFlow.emit(item.id to DownloadStatus.Error(e.message.toString(), e))
-                    break
+                    is DownloadProgressResult.Progressed -> {
+                        numberOfTries = 0
+                        totalRead += result.bytes
+                        _downloadFlow.emit(
+                            item.id to DownloadStatus.Progress(
+                                result.bytes,
+                                totalRead,
+                                item.downloadSize
+                            )
+                        )
+                        updateNotification(notificationBuilder, item, totalRead.toInt())
+                    }
                 }
             }
         } finally {
@@ -344,6 +337,13 @@ class DownloadService : LifecycleService() {
         }
 
         if (!item.isFinished) _downloadFlow.emit(item.id to DownloadStatus.Paused)
+    }
+
+    private suspend fun reportDownloadFailure(error: Exception, id: Int) {
+        Log.e(TAG(), "Audio download failed", error)
+        val message = error.localizedMessage ?: getString(R.string.unknown_error)
+        toastFromMainDispatcher(getString(R.string.download) + ": " + message)
+        if (id >= 0) _downloadFlow.emit(id to DownloadStatus.Error(message, error))
     }
 
     private fun startNextEnqueueDownload() {
@@ -356,6 +356,10 @@ class DownloadService : LifecycleService() {
                 try {
                     val item = Database.downloadDao().findDownloadItemById(id) ?: return@launch
                     if (!item.isFinished && isDownloading(id)) selectFormatAndDownloadFile(item)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    reportDownloadFailure(e, id)
                 } finally {
                     runningIds.remove(id)
                     activeIds.remove(id)

@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.getSystemService
@@ -73,6 +74,11 @@ class PlaylistDownloadEnqueueService : LifecycleService() {
                 amountOfVideosDone = 0
                 try {
                     enqueuePlaylist()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e("PlaylistAudioDownload", "Unable to enqueue playlist audio", e)
+                    toastFromMainDispatcher(e.localizedMessage ?: getString(R.string.unknown_error))
                 } finally {
                     stopSelfResult(startId)
                 }
