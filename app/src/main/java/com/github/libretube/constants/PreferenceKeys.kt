@@ -22,7 +22,6 @@ object PreferenceKeys {
     const val GRID_COLUMNS_PORTRAIT = "grid"
     const val GRID_COLUMNS_LANDSCAPE = "grid_landscape"
     const val APP_ICON = "icon_change"
-    const val NEW_VIDEOS_BADGE = "new_videos_badge"
     const val PLAYLISTS_ORDER = "playlists_order"
     const val PLAYLIST_SORT_ORDER = "playlist_sort_order"
     const val HOME_TAB_CONTENT = "home_tab_content"

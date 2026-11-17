@@ -80,35 +80,21 @@
 
                     </LinearLayout>
 
-                    <com.google.android.material.button.MaterialButtonGroup
-                        style="@style/Widget.Material3.MaterialSplitButton"
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/bookmark"
+                        style="?materialIconButtonFilledTonalStyle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginEnd="4dp"
-                        android:gravity="center"
-                        android:paddingTop="0dp"
-                        android:paddingBottom="0dp">
+                        android:contentDescription="@string/bookmark"
+                        app:icon="@drawable/ic_bookmark_outlined" />
 
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/sortBTN"
-                            style="?materialButtonTonalStyle"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:visibility="gone"
-                            app:icon="@drawable/ic_sort"
-                            app:iconGravity="textEnd"
-                            tools:text="@string/most_recent"
-                            tools:visibility="visible" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/optionsMenu"
-                            style="?materialIconButtonFilledTonalStyle"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_gravity="center"
-                            app:icon="@drawable/ic_three_dots" />
-
-                    </com.google.android.material.button.MaterialButtonGroup>
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/optionsMenu"
+                        style="?materialIconButtonFilledTonalStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/track_options"
+                        app:icon="@drawable/ic_three_dots" />
 
                 </LinearLayout>
 
@@ -118,6 +104,37 @@
                     android:layout_height="wrap_content"
                     android:layout_marginHorizontal="2dp"
                     android:padding="10dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="12dp"
+                    android:orientation="horizontal">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/sortBTN"
+                        style="?materialButtonTonalStyle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        app:icon="@drawable/ic_sort"
+                        android:text="@string/playlist_original_order" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/author_filter"
+                        style="?materialButtonTonalStyle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/all_playlist_authors" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/snapshot_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="12dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:visibility="gone"
+                    android:textAppearance="?attr/textAppearanceBodySmall" />
 
                 <com.google.android.material.button.MaterialButtonGroup
                     android:layout_width="match_parent"
@@ -138,39 +155,26 @@
                         app:icon="@drawable/ic_playlist" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/bookmark"
+                        android:id="@+id/shuffle"
                         style="@style/Widget.Material3Expressive.Button"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:maxLines="1"
-                        android:text="@string/bookmark"
-                        app:icon="@drawable/ic_bookmark_outlined" />
+                        android:text="@string/shuffle"
+                        app:icon="@drawable/ic_shuffle" />
 
                 </com.google.android.material.button.MaterialButtonGroup>
 
-                <LinearLayout
+                <TextView
                     android:id="@+id/nothing_here"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:layout_marginBottom="35dp"
-                    android:orientation="vertical"
-                    android:visibility="gone">
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:padding="16dp"
+                    android:text="@string/emptyList"
+                    android:visibility="gone" />
 
-                    <ImageView
-                        android:layout_width="100dp"
-                        android:layout_height="100dp"
-                        android:layout_gravity="center"
-                        android:src="@drawable/ic_list" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="center"
-                        android:text="@string/emptyList"
-                        android:textSize="20sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
 
 
             </LinearLayout>

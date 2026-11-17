@@ -59,7 +59,6 @@ import com.github.libretube.ui.fragments.DownloadsFragment
 import com.github.libretube.ui.models.DownloadsViewModel
 import com.github.libretube.ui.models.PlaylistViewModel
 import com.github.libretube.ui.models.SearchViewModel
-import com.github.libretube.ui.models.SubscriptionsViewModel
 import com.github.libretube.ui.preferences.BackupRestoreSettings
 import com.github.libretube.ui.preferences.BackupRestoreSettings.Companion.FILETYPE_ANY
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -74,7 +73,6 @@ class MainActivity : AbstractPlayerHostActivity() {
     lateinit var navController: NavController
     private var startFragmentId = R.id.homeFragment
 
-    private val subscriptionsViewModel: SubscriptionsViewModel by viewModels()
 
     // search related stuff
     private lateinit var searchView: SearchView
@@ -212,7 +210,6 @@ class MainActivity : AbstractPlayerHostActivity() {
                 ErrorDialog().show(supportFragmentManager, null)
         }
 
-        setupSubscriptionsBadge()
 
         loadIntentData()
         if (!intent.hasExtra(IntentData.videoId) && !intent.getBooleanExtra(IntentData.maximizePlayer, false)) restoreAudioQueue()
@@ -260,41 +257,6 @@ class MainActivity : AbstractPlayerHostActivity() {
             is ScrollView -> scrollView.smoothScrollTo(0, 0)
             is NestedScrollView -> scrollView.smoothScrollTo(0, 0)
             is RecyclerView -> scrollView.smoothScrollToPosition(0)
-        }
-    }
-
-    /**
-     * Initialize the notification badge showing the amount of new videos
-     */
-    private fun setupSubscriptionsBadge() {
-        if (!PreferenceHelper.getBoolean(
-                PreferenceKeys.NEW_VIDEOS_BADGE,
-                false
-            )
-        ) {
-            return
-        }
-
-        subscriptionsViewModel.fetchSubscriptions(this)
-
-        subscriptionsViewModel.videoFeed.observe(this) { feed ->
-            val lastCheckedFeedTime = PreferenceHelper.getLastCheckedFeedTime(seenByUser = true)
-            val lastSeenVideoIndex = feed.orEmpty()
-                .filter { !it.isUpcoming }
-                .indexOfFirst { it.uploaded <= lastCheckedFeedTime }
-            if (lastSeenVideoIndex < 1) return@observe
-
-            binding.bottomNav.getOrCreateBadge(R.id.subscriptionsFragment).apply {
-                number = lastSeenVideoIndex
-                backgroundColor = ThemeHelper.getThemeColor(
-                    this@MainActivity,
-                    androidx.appcompat.R.attr.colorPrimary
-                )
-                badgeTextColor = ThemeHelper.getThemeColor(
-                    this@MainActivity,
-                    com.google.android.material.R.attr.colorOnPrimary
-                )
-            }
         }
     }
 
@@ -608,10 +570,6 @@ class MainActivity : AbstractPlayerHostActivity() {
     }
 
     private fun navigateToBottomSelectedItem(item: MenuItem): Boolean {
-        if (item.itemId == R.id.subscriptionsFragment) {
-            binding.bottomNav.removeBadge(R.id.subscriptionsFragment)
-        }
-
         // Remove focus from search view when navigating to bottom view.
         searchItem.collapseActionView()
 

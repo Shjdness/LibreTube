@@ -6,11 +6,15 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.github.libretube.db.obj.LocalSubscription
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface LocalSubscriptionDao {
     @Query("SELECT * FROM localSubscription")
     suspend fun getAll(): List<LocalSubscription>
+
+    @Query("SELECT * FROM localSubscription")
+    fun observeAll(): Flow<List<LocalSubscription>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(localSubscription: LocalSubscription)

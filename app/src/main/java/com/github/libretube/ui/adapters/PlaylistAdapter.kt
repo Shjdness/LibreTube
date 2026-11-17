@@ -34,6 +34,18 @@ class PlaylistAdapter(
     areContentsTheSame = { a, b -> a.item == b.item },
 )) {
     private var downloadedAudioIds = emptySet<String>()
+    private val publicationDates = mutableMapOf<String, String>()
+
+    fun hasPublicationDate(videoId: String) = videoId in publicationDates
+
+    fun setPublicationDates(dates: Map<String, String>) {
+        val changed = dates.filter { (id, date) -> publicationDates[id] != date }
+        if (changed.isEmpty()) return
+        publicationDates.putAll(changed)
+        currentList.forEachIndexed { index, item ->
+            if (item.item.url?.toID() in changed.keys) notifyItemChanged(index)
+        }
+    }
 
     fun setDownloadedAudioIds(ids: Set<String>) {
         val previous = downloadedAudioIds
@@ -56,8 +68,13 @@ class PlaylistAdapter(
 
         holder.binding.apply {
             videoTitle.text = streamItem.title
-            channelName.text = streamItem.uploaderName
-            duration.text = streamItem.duration?.takeIf { it > 0 }?.let(DateUtils::formatElapsedTime)
+            val publicationDate = streamItem.publicationDate() ?: publicationDates[videoId]
+            trackMetadata.text = listOfNotNull(
+                streamItem.uploaderName?.takeIf { it.isNotBlank() },
+                publicationDate,
+                streamItem.duration?.takeIf { it > 0 }?.let(DateUtils::formatElapsedTime)
+            ).joinToString(" · ")
+            trackMetadata.isVisible = trackMetadata.text.isNotEmpty()
 
             root.setOnClickListener {
                 onVideoClick(streamItem)

@@ -568,4 +568,14 @@
     <string name="audio_quality_settings_summary">设置 Wi-Fi 和移动数据下的音质</string>
     <string name="track_options">音频选项</string>
     <string name="subscription_group_empty">此分组还没有频道</string>
+    <string name="bookmark_retry">暂时无法读取播单，点此重试。</string>
+    <string name="bookmark_partial">当前可浏览 %1$d 条曲目，点此刷新播单。</string>
+    <string name="remove_bookmark_action">移除书签</string>
+    <string name="all_playlist_authors">全部作者</string>
+    <string name="filter_playlist_author">按作者筛选</string>
+    <string name="unknown_playlist_author">未知作者</string>
+    <string name="playlist_author_ascending">作者 A–Z</string>
+    <string name="playlist_author_descending">作者 Z–A</string>
+    <string name="playlist_original_order">播单原顺序</string>
+    <string name="followed_channels">关注频道</string>
 </resources>

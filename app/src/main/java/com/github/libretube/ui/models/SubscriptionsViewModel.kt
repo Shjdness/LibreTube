@@ -27,7 +27,7 @@ class SubscriptionsViewModel : ViewModel() {
     var subscriptions = MutableLiveData<List<Subscription>?>()
     val feedProgress = MutableLiveData<FeedProgress?>()
 
-    var subFeedRecyclerViewState: Parcelable? = null
+    var channelListState: Parcelable? = null
 
     val groups = MutableLiveData<List<SubscriptionGroup>>()
     var groupToEdit: SubscriptionGroup? = null

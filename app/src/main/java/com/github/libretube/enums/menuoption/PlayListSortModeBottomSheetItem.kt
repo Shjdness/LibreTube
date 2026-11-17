@@ -22,12 +22,14 @@ sealed class PlayListSortModeBottomSheetItem(
                 DurationReversed,
                 Alphabetic,
                 AlphabeticReversed,
+                Author,
+                AuthorReversed,
             )
         }
     }
 
     data object LeastRecent : PlayListSortModeBottomSheetItem(
-        titleStringRes = R.string.least_recent,
+        titleStringRes = R.string.playlist_original_order,
         drawableRes = R.drawable.ic_sort_by_oldest,
     )
 
@@ -53,6 +55,16 @@ sealed class PlayListSortModeBottomSheetItem(
 
     data object AlphabeticReversed : PlayListSortModeBottomSheetItem(
         titleStringRes = R.string.alphabetic_reversed,
+        drawableRes = R.drawable.ic_sort_by_alpha_reversed,
+    )
+
+    data object Author : PlayListSortModeBottomSheetItem(
+        titleStringRes = R.string.playlist_author_ascending,
+        drawableRes = R.drawable.ic_sort_by_alpha,
+    )
+
+    data object AuthorReversed : PlayListSortModeBottomSheetItem(
+        titleStringRes = R.string.playlist_author_descending,
         drawableRes = R.drawable.ic_sort_by_alpha_reversed,
     )
 }

@@ -5,6 +5,7 @@ import com.github.libretube.api.obj.Playlists
 import com.github.libretube.api.obj.StreamItem
 import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.db.DatabaseHolder.Database
+import com.github.libretube.db.obj.BookmarkSnapshot
 import com.github.libretube.db.obj.DownloadPlaylist
 import com.github.libretube.db.obj.DownloadPlaylistVideosCrossRef
 import com.github.libretube.extensions.toID
@@ -17,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 
 object PlaylistsHelper {
     const val MAX_CONCURRENT_IMPORT_CALLS = 5
@@ -75,6 +77,22 @@ object PlaylistsHelper {
             videos = tracks.size,
             relatedStreams = tracks
         )
+    }
+
+    suspend fun getBookmarkSnapshot(playlistId: String): Pair<Playlist, Boolean>? {
+        val snapshot = Database.playlistBookmarkDao().getSnapshot(playlistId) ?: return null
+        val playlist = runCatching { Json.decodeFromString<Playlist>(snapshot.playlistJson) }
+            .getOrNull() ?: return null
+        return playlist to snapshot.complete
+    }
+
+    suspend fun saveBookmarkSnapshot(playlistId: String, playlist: Playlist, complete: Boolean) {
+        if (playlist.relatedStreams.isEmpty() && playlist.videos > 0) return
+        // Pagination restarts from the first page whenever the remote playlist is refreshed.
+        val snapshot = BookmarkSnapshot(
+            playlistId, Json.encodeToString(playlist.copy(nextpage = null)), complete, playlist.relatedStreams.size
+        )
+        Database.playlistBookmarkDao().saveSnapshot(snapshot, playlist.toPlaylistBookmark(playlistId))
     }
 
     suspend fun getAllPlaylistsWithVideos(playlistIds: List<String>? = null): List<Playlist> {

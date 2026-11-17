@@ -3,6 +3,8 @@ package com.github.libretube.ui.adapters
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.core.os.bundleOf
+import androidx.core.view.isGone
+import com.github.libretube.extensions.dpToPx
 import androidx.recyclerview.widget.ListAdapter
 import com.github.libretube.api.obj.Subscription
 import com.github.libretube.constants.IntentData
@@ -17,7 +19,7 @@ import com.github.libretube.ui.extensions.setupSubscriptionButton
 import com.github.libretube.ui.sheets.ChannelOptionsBottomSheet
 import com.github.libretube.ui.viewholders.SubscriptionChannelViewHolder
 
-class SubscriptionChannelAdapter :
+class SubscriptionChannelAdapter(private val quickNavigation: Boolean = false) :
     ListAdapter<Subscription, SubscriptionChannelViewHolder>(DiffUtilItemCallback()) {
 
     // Track recently unsubscribed channels to preserve their unsubscribed state when
@@ -34,15 +36,22 @@ class SubscriptionChannelAdapter :
     }
 
     override fun onBindViewHolder(holder: SubscriptionChannelViewHolder, position: Int) {
-        val subscription = getItem(holder.bindingAdapterPosition)
+        val subscription = getItem(position)
 
         holder.binding.apply {
-            subscriptionChannelName.text = subscription.name
-            ImageHelper.loadImage(subscription.avatar, subscriptionChannelImage, true)
-
+            subscriptionChannelName.text = subscription.name.ifBlank { subscription.url }
             root.setOnClickListener {
                 NavigationHelper.navigateChannel(root.context, subscription.url)
             }
+            if (quickNavigation) {
+                subscriptionChannelImage.isGone = true
+                subscriptionControls.isGone = true
+                root.minimumHeight = 52f.dpToPx()
+                subscriptionChannelName.maxLines = Int.MAX_VALUE
+                subscriptionChannelName.ellipsize = null
+                return
+            }
+            ImageHelper.loadImage(subscription.avatar, subscriptionChannelImage, true)
             root.setOnLongClickListener {
                 val channelOptionsSheet = ChannelOptionsBottomSheet()
                 channelOptionsSheet.arguments = bundleOf(

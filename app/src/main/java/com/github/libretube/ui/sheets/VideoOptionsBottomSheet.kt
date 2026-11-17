@@ -4,12 +4,10 @@ import android.os.Bundle
 import androidx.core.os.bundleOf
 import androidx.fragment.app.setFragmentResult
 import androidx.lifecycle.lifecycleScope
-import androidx.navigation.fragment.NavHostFragment
 import com.github.libretube.R
 import com.github.libretube.api.obj.StreamItem
 import com.github.libretube.api.obj.WatchHistoryEntryMetadata
 import com.github.libretube.constants.IntentData
-import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.enums.ShareObjectType
 import com.github.libretube.enums.menuoption.VideoBottomSheetItem
 import com.github.libretube.extensions.parcelable
@@ -18,14 +16,11 @@ import com.github.libretube.extensions.toastFromMainDispatcher
 import com.github.libretube.helpers.DownloadHelper
 import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.helpers.PlayerHelper
-import com.github.libretube.helpers.PreferenceHelper
 import com.github.libretube.obj.ShareData
 import com.github.libretube.parcelable.PlayerData
 import com.github.libretube.repo.UserDataRepositoryHelper
-import com.github.libretube.ui.activities.MainActivity
 import com.github.libretube.ui.dialogs.AddToPlaylistDialog
 import com.github.libretube.ui.dialogs.ShareDialog
-import com.github.libretube.ui.fragments.SubscriptionsFragment
 import com.github.libretube.util.PlayingQueue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -112,15 +107,6 @@ class VideoOptionsBottomSheet : BaseBottomSheet() {
                     )
                     UserDataRepositoryHelper.userDataRepository
                         .updateWatchHistoryEntry(watchPosition)
-                }
-                if (PreferenceHelper.getBoolean(PreferenceKeys.HIDE_WATCHED_FROM_FEED, false)) {
-                    // get the host fragment containing the current fragment
-                    val navHostFragment = (context as MainActivity).supportFragmentManager
-                        .findFragmentById(R.id.fragment) as NavHostFragment?
-                    // get the current fragment
-                    val fragment = navHostFragment?.childFragmentManager?.fragments
-                        ?.firstOrNull() as? SubscriptionsFragment
-                    fragment?.removeItem(videoId)
                 }
                 setFragmentResult(
                     VIDEO_OPTIONS_SHEET_REQUEST_KEY,

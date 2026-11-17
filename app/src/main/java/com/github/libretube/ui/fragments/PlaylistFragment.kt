@@ -11,7 +11,6 @@ import androidx.core.os.bundleOf
 import androidx.core.text.parseAsHtml
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
-import androidx.core.view.setPadding
 import androidx.core.view.updatePadding
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
@@ -22,8 +21,9 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
-import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.appcompat.app.AlertDialog
 import com.github.libretube.R
 import com.github.libretube.api.MediaServiceRepository
 import com.github.libretube.api.PlaylistsHelper
@@ -31,14 +31,14 @@ import com.github.libretube.api.obj.Playlist
 import com.github.libretube.api.obj.StreamItem
 import com.github.libretube.constants.IntentData
 import com.github.libretube.db.DatabaseHolder.Database
-import com.github.libretube.db.obj.DownloadPlaylistVideosCrossRef
+import com.github.libretube.db.obj.TrackPublicationDate
+import com.github.libretube.extensions.toLocalDate
 import com.github.libretube.helpers.NetworkHelper
 import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.databinding.FragmentPlaylistBinding
 import com.github.libretube.enums.PlaylistType
 import com.github.libretube.enums.menuoption.PlayListSortModeBottomSheetItem
 import com.github.libretube.extensions.TAG
-import com.github.libretube.extensions.ceilHalf
 import com.github.libretube.extensions.dpToPx
 import com.github.libretube.extensions.setOnDismissListener
 import com.github.libretube.extensions.toID
@@ -47,7 +47,6 @@ import com.github.libretube.helpers.DownloadHelper
 import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.helpers.PreferenceHelper
 import com.github.libretube.parcelable.PlayerData
-import com.github.libretube.repo.UserDataRepositoryHelper
 import com.github.libretube.ui.adapters.PlaylistAdapter
 import com.github.libretube.ui.adapters.PlaylistItem
 import com.github.libretube.ui.base.BaseActivity
@@ -61,6 +60,8 @@ import com.github.libretube.util.PlayingQueue
 import com.github.libretube.util.TextUtils
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -72,6 +73,7 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
 
     // general playlist information
     private lateinit var playlistId: String
+    private var currentPlaylist: Playlist? = null
     private var playlistName: String? = null
     private var playlistType = PlaylistType.PUBLIC
 
@@ -79,7 +81,12 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
     private var playlistFeed = mutableListOf<StreamItem>()
     private var playlistAdapter: PlaylistAdapter? = null
     private var nextPage: String? = null
-    private var isLoading = true
+    private var refreshJob: Job? = null
+    private var datesJob: Job? = null
+    private val triedDates = mutableSetOf<String>()
+    private var dateSourceUnavailable = false
+    private var snapshotComplete = false
+    private var selectedAuthor: String? = null
     private var isBookmarked = false
 
     // view models
@@ -98,335 +105,431 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
         super.onCreate(savedInstanceState)
         playlistId = args.playlistId
         playlistType = args.playlistType
+        selectedAuthor = savedInstanceState?.getString("playlistAuthor")
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString("playlistAuthor", selectedAuthor)
     }
 
     override fun setLayoutManagers(gridItems: Int) {
-        _binding?.playlistRecView?.layoutManager = GridLayoutManager(context, gridItems.ceilHalf())
+        val view = _binding?.playlistRecView ?: return
+        if (view.layoutManager == null) view.layoutManager = LinearLayoutManager(view.context)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         _binding = FragmentPlaylistBinding.bind(view)
         super.onViewCreated(view, savedInstanceState)
 
+        val localPlaylist = playlistType != PlaylistType.PUBLIC
+        val adapter = PlaylistAdapter(playlistId) { track ->
+            val items = visibleTracks().map { it.item }
+            if (track in items) startPlayback(items, track)
+        }
+        playlistAdapter = adapter
+        binding.playlistRecView.adapter = adapter
         binding.playlistProgress.isVisible = true
-
-        lifecycleScope.launch(Dispatchers.IO) {
-            isBookmarked =
-                UserDataRepositoryHelper.userDataRepository.getPlaylistBookmark(playlistId) != null
-
-            withContext(Dispatchers.Main) {
-                updateBookmarkRes()
+        binding.bookmark.isVisible = !localPlaylist
+        binding.bookmark.setOnClickListener { toggleBookmark() }
+        binding.playAll.setOnClickListener { startPlayback(visibleTracks().map { it.item }) }
+        binding.shuffle.setOnClickListener { startPlayback(visibleTracks().map { it.item }.shuffled()) }
+        binding.authorFilter.setOnClickListener { chooseAuthor() }
+        binding.sortBTN.isVisible = true
+        binding.sortBTN.setOnClickListener {
+            BaseBottomSheet().apply {
+                setItems(sortOptions) { index ->
+                    selectedSortOrder = index
+                    showPlaylistVideos()
+                }
+            }.show(childFragmentManager)
+        }
+        binding.optionsMenu.setOnClickListener { showOptions() }
+        binding.playlistRecView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                if (newState == RecyclerView.SCROLL_STATE_IDLE) loadVisibleDates()
+            }
+        })
+        binding.snapshotStatus.setOnClickListener {
+            if (!localPlaylist && refreshJob?.isActive != true) {
+                dateSourceUnavailable = false
+                refreshPublicPlaylist()
             }
         }
-
         commonPlayerViewModel.isMiniPlayerVisible.observe(viewLifecycleOwner) {
             binding.playlistRecView.updatePadding(bottom = if (it) 64f.dpToPx() else 0)
         }
-
-        // manually restore the recyclerview state due to https://github.com/material-components/material-components-android/issues/3473
-        binding.playlistRecView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
-                super.onScrollStateChanged(recyclerView, newState)
-                recyclerViewState = recyclerView.layoutManager?.onSaveInstanceState()
+        playlistViewModel.searchQuery.observe(viewLifecycleOwner) { showPlaylistVideos() }
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                Database.downloadDao().observeDownloads()
+                    .map { items ->
+                        items.filter { it.finishedAudio != null }.mapTo(mutableSetOf()) { it.download.videoId } to
+                            items.mapNotNull { item ->
+                                item.download.uploadDate?.let { item.download.videoId to it.toString() }
+                            }.toMap()
+                    }
+                    .distinctUntilChanged()
+                    .flowOn(Dispatchers.IO)
+                    .collect { (downloadIds, dates) ->
+                        adapter.setDownloadedAudioIds(downloadIds)
+                        adapter.setPublicationDates(dates)
+                    }
             }
-        })
+        }
 
-        fetchPlaylist()
+        if (localPlaylist) {
+            binding.playlistRecView.setOnDismissListener(::removeFromPlaylist)
+        } else {
+            binding.playlistRecView.addOnBottomReachedListener {
+                if (!isBookmarked && refreshJob?.isActive != true) fetchPublicPage()
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            safelyLoad {
+                if (localPlaylist) {
+                    display(PlaylistsHelper.getPlaylist(playlistId, playlistType), complete = true)
+                } else {
+                    val bookmark = Database.playlistBookmarkDao().findById(playlistId)
+                    isBookmarked = bookmark != null
+                    updateBookmarkButton()
+                    val cached = PlaylistsHelper.getBookmarkSnapshot(playlistId)
+                    when {
+                        cached != null -> display(cached.first, cached.second)
+                        bookmark != null -> {
+                            val downloaded = PlaylistsHelper.getCachedPlaylist(playlistId)
+                            display(Playlist(
+                                name = bookmark.playlistName,
+                                uploader = bookmark.uploader,
+                                uploaderUrl = bookmark.uploaderUrl,
+                                videos = bookmark.videos,
+                                description = downloaded?.description,
+                                relatedStreams = downloaded?.relatedStreams.orEmpty()
+                            ), complete = false)
+                        }
+                        else -> PlaylistsHelper.getCachedPlaylist(playlistId)?.let { display(it, complete = false) }
+                    }
+                    refreshPublicPlaylist()
+                }
+            }
+        }
     }
 
     override fun onDestroyView() {
-        super.onDestroyView()
+        recyclerViewState = _binding?.playlistRecView?.layoutManager?.onSaveInstanceState()
+        playlistAdapter = null
         _binding = null
+        super.onDestroyView()
     }
 
-    private fun updateBookmarkRes() {
+    private fun display(playlist: Playlist, complete: Boolean) {
+        val firstDisplay = currentPlaylist == null || !binding.playlistRecView.isVisible
+        currentPlaylist = playlist
+        playlistFeed = playlist.relatedStreams.toMutableList()
+        nextPage = playlist.nextpage
+        snapshotComplete = complete
+        playlistName = playlist.name
+        if (complete && selectedAuthor != null && playlistFeed.none { authorKey(it) == selectedAuthor }) {
+            selectedAuthor = null
+        }
+        binding.playlistAppBar.isVisible = true
+        binding.playlistRecView.isVisible = true
+        binding.playlistProgress.isGone = true
+        binding.playlistName.text = playlist.name
+        binding.playlistInfo.text = getChannelAndVideoString(playlist, playlist.videos)
+        binding.playlistInfo.setOnClickListener {
+            NavigationHelper.navigateChannel(requireContext(), playlist.uploaderUrl)
+        }
+        binding.playlistDescription.text = playlist.description?.parseAsHtml()
+        binding.playlistDescription.isGone = playlist.description.isNullOrBlank()
+        showPlaylistVideos(firstDisplay)
+    }
+
+    private suspend fun safelyLoad(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG(), "Could not load playlist $playlistId", e)
+        } finally {
+            _binding?.playlistProgress?.isGone = true
+            if (currentPlaylist == null) {
+                _binding?.playlistAppBar?.isVisible = true
+                _binding?.snapshotStatus?.apply {
+                    isVisible = true
+                    setText(R.string.bookmark_retry)
+                }
+            }
+        }
+    }
+
+    private fun refreshPublicPlaylist() {
+        if (!NetworkHelper.isNetworkAvailable(requireContext())) {
+            binding.playlistProgress.isGone = true
+            if (currentPlaylist == null) {
+                binding.playlistAppBar.isVisible = true
+                binding.snapshotStatus.isVisible = true
+                binding.snapshotStatus.setText(R.string.bookmark_retry)
+            }
+            return
+        }
+        refreshJob = viewLifecycleOwner.lifecycleScope.launch {
+            safelyLoad {
+                val first = withTimeoutOrNull(20_000) {
+                    PlaylistsHelper.getPlaylist(playlistId, PlaylistType.PUBLIC)
+                } ?: return@safelyLoad
+                if (first.relatedStreams.isEmpty() &&
+                    (first.videos > 0 || playlistFeed.isNotEmpty() || first.nextpage != null)
+                ) return@safelyLoad
+                if (isBookmarked) {
+                    cacheBookmark(first)
+                } else {
+                    PlaylistsHelper.cachePlaylistForOffline(playlistId, first, first.nextpage == null)
+                    display(first, first.nextpage == null)
+                }
+            }
+        }
+    }
+
+    private suspend fun cacheBookmark(first: Playlist) {
+        var page = first.nextpage
+        val tracks = first.relatedStreams.toMutableList()
+        val seenPages = mutableSetOf<String>()
+        PlaylistsHelper.saveBookmarkSnapshot(playlistId, first, page == null)
+        if (page == null || (!snapshotComplete && tracks.size >= playlistFeed.size)) {
+            display(first, page == null)
+        }
+        while (page != null && seenPages.add(page)) {
+            val token = page
+            val source = withTimeoutOrNull(20_000) {
+                MediaServiceRepository.instance.getPlaylistNextPage(playlistId, token)
+            } ?: break
+            if (source.relatedStreams.isEmpty()) break
+            tracks.addAll(source.relatedStreams)
+            page = source.nextpage
+        }
+        if (tracks.size == first.relatedStreams.size) return
+        val updated = first.copy(relatedStreams = tracks, nextpage = page)
+        PlaylistsHelper.saveBookmarkSnapshot(playlistId, updated, page == null)
+        if (page == null || (!snapshotComplete && tracks.size >= playlistFeed.size)) {
+            display(updated, page == null)
+        }
+    }
+
+    private fun fetchPublicPage() {
+        val token = nextPage ?: return
+        refreshJob = viewLifecycleOwner.lifecycleScope.launch {
+            safelyLoad {
+                val response = withTimeoutOrNull(20_000) {
+                    MediaServiceRepository.instance.getPlaylistNextPage(playlistId, token)
+                } ?: return@safelyLoad
+                if (response.relatedStreams.isEmpty() || response.nextpage == token) return@safelyLoad
+                val updated = currentPlaylist?.copy(
+                    relatedStreams = playlistFeed + response.relatedStreams,
+                    nextpage = response.nextpage,
+                ) ?: return@safelyLoad
+                PlaylistsHelper.cachePlaylistForOffline(playlistId, updated, response.nextpage == null)
+                display(updated, response.nextpage == null)
+            }
+        }
+    }
+
+    private fun updateBookmarkButton() {
         binding.bookmark.setIconResource(
             if (isBookmarked) R.drawable.ic_bookmark else R.drawable.ic_bookmark_outlined
         )
+        binding.bookmark.contentDescription = getString(
+            if (isBookmarked) R.string.remove_bookmark_action else R.string.bookmark
+        )
     }
 
-    private fun fetchPlaylist() {
+    private fun toggleBookmark() {
+        val playlist = currentPlaylist ?: return
         viewLifecycleOwner.lifecycleScope.launch {
-            val online = NetworkHelper.isNetworkAvailable(requireContext())
-            val localPlaylist = playlistType == PlaylistType.PRIVATE
-            val response = withContext(Dispatchers.IO) {
-                if (online || localPlaylist) {
-                    val playlist = try {
-                        PlaylistsHelper.getPlaylist(playlistId, playlistType)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Log.w(TAG(), "Could not load playlist $playlistId", e)
-                        null
-                    }
-                    if (playlist != null) {
-                        if (!localPlaylist) PlaylistsHelper.cachePlaylistForOffline(playlistId, playlist,
-                            replaceLinks = playlist.nextpage == null)
-                        return@withContext playlist
-                    }
+            binding.bookmark.isEnabled = false
+            try {
+                refreshJob?.cancel()
+                val dao = Database.playlistBookmarkDao()
+                if (isBookmarked) {
+                    dao.deleteById(playlistId)
+                    isBookmarked = false
+                } else {
+                    dao.insert(playlist.toPlaylistBookmark(playlistId))
+                    isBookmarked = true
+                    PlaylistsHelper.saveBookmarkSnapshot(playlistId, playlist, snapshotComplete)
+                    refreshPublicPlaylist()
                 }
-                PlaylistsHelper.getCachedPlaylist(playlistId)
-            }
-            if (response == null) {
-                _binding?.playlistProgress?.isGone = true
-                _binding?.nothingHere?.isVisible = true
-                return@launch
-            }
-            val binding = _binding ?: return@launch
-
-            playlistFeed = response.relatedStreams.toMutableList()
-            nextPage = response.nextpage
-            playlistName = response.name
-            isLoading = false
-
-
-            binding.playlistProgress.isGone = true
-            binding.playlistAppBar.isVisible = true
-            binding.playlistRecView.isVisible = true
-            binding.playlistName.text = response.name
-
-            binding.playlistInfo.text = getChannelAndVideoString(response, response.videos)
-            binding.playlistInfo.setOnClickListener {
-                NavigationHelper.navigateChannel(requireContext(), response.uploaderUrl)
-            }
-
-            binding.playlistDescription.text = response.description?.parseAsHtml()
-            // hide playlist description text view if not provided
-            binding.playlistDescription.isGone = response.description.orEmpty().isBlank()
-
-            playlistAdapter = PlaylistAdapter(playlistId) { streamItem ->
-                startVideoItemPlayback(streamItem)
-            }
-            binding.playlistRecView.adapter = playlistAdapter
-            viewLifecycleOwner.lifecycleScope.launch {
-                repeatOnLifecycle(Lifecycle.State.STARTED) {
-                    Database.downloadDao().observeDownloads()
-                        .map { items -> items.filter { it.finishedAudio != null }.mapTo(mutableSetOf()) { it.download.videoId } }
-                        .distinctUntilChanged()
-                        .flowOn(Dispatchers.IO)
-                        .collect { playlistAdapter?.setDownloadedAudioIds(it) }
-                }
-            }
-
-            // listen for playlist items to become deleted
-            playlistAdapter!!.registerAdapterDataObserver(object :
-                RecyclerView.AdapterDataObserver() {
-                override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) {
-
-                    binding.playlistInfo.text =
-                        getChannelAndVideoString(response, playlistFeed.size)
-                }
-            })
-
-            binding.playlistRecView.addOnBottomReachedListener {
-                if (isLoading) return@addOnBottomReachedListener
-
-                // append more playlists to the recycler view
-                if (playlistType == PlaylistType.PUBLIC) {
-                    fetchNextPage()
-                }
-            }
-
-            // listener for swiping to the left or right
-            if (playlistType != PlaylistType.PUBLIC && (online || localPlaylist)) {
-                binding.playlistRecView.setOnDismissListener { position ->
-                    removeFromPlaylist(position)
-                }
-            }
-
-            showPlaylistVideos()
-
-            playlistViewModel.searchQuery.observe(viewLifecycleOwner) {
+                updateBookmarkButton()
                 showPlaylistVideos()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG(), "Could not update playlist bookmark", e)
+                context?.toastFromMainDispatcher(R.string.unknown_error)
+            } finally {
+                _binding?.bookmark?.isEnabled = true
             }
-
-            // show playlist options
-            binding.optionsMenu.setOnClickListener {
-                val sheet = PlaylistOptionsBottomSheet()
-                sheet.arguments = bundleOf(
-                    IntentData.playlistId to playlistId,
-                    IntentData.playlistName to playlistName.orEmpty(),
-                    IntentData.playlistType to playlistType,
-                    IntentData.playlistThumbnail to response.thumbnailUrl,
-                )
-
-                val fragmentManager = (context as BaseActivity).supportFragmentManager
-                fragmentManager.setFragmentResultListener(
-                    PlaylistOptionsBottomSheet.PLAYLIST_OPTIONS_REQUEST_KEY,
-                    (context as BaseActivity)
-                ) { _, resultBundle ->
-                    val newPlaylistDescription =
-                        resultBundle.getString(IntentData.playlistDescription)
-                    val newPlaylistName =
-                        resultBundle.getString(IntentData.playlistName)
-                    val isPlaylistToBeDeleted =
-                        resultBundle.getBoolean(IntentData.playlistTask)
-
-                    newPlaylistDescription?.let {
-                        binding.playlistDescription.text = it
-                        response.description = it
-                    }
-
-                    newPlaylistName?.let {
-                        binding.playlistName.text = it
-                        playlistName = it
-                    }
-
-                    if (isPlaylistToBeDeleted) {
-                        findNavController().popBackStack()
-                        return@setFragmentResultListener
-                    }
-                }
-
-                sheet.show(fragmentManager)
-            }
-
-            if (playlistFeed.isEmpty()) {
-                binding.nothingHere.isVisible = true
-                binding.playAll.isGone = true
-            } else {
-                binding.playAll.setOnClickListener {
-                    val queue = getSortedVideos().map { it.item }
-                    val first = queue.firstOrNull() ?: return@setOnClickListener
-                    navigateVideo(first, queue, preferAvailable = true)
-                }
-            }
-
-            if (playlistType == PlaylistType.PUBLIC) {
-                binding.bookmark.setOnClickListener {
-                    isBookmarked = !isBookmarked
-                    updateBookmarkRes()
-                    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                        if (!isBookmarked) {
-                            UserDataRepositoryHelper.userDataRepository
-                                .deletePlaylistBookmark(playlistId)
-                        } else {
-                            val bookmark = response.toPlaylistBookmark(playlistId)
-                            UserDataRepositoryHelper.userDataRepository
-                                .createPlaylistBookmark(bookmark)
-                        }
-                    }
-                }
-            } else {
-                // private playlist, means shuffle is possible because all videos are received at once
-                if (playlistFeed.isEmpty()) {
-                    binding.bookmark.isGone = true
-                } else {
-                    binding.bookmark.setIconResource(R.drawable.ic_shuffle)
-                    binding.bookmark.text = getString(R.string.shuffle)
-                    binding.bookmark.setOnClickListener {
-                        val queue = getSortedVideos().map { it.item }.shuffled()
-                        val first = queue.firstOrNull() ?: return@setOnClickListener
-                        navigateVideo(first, queue, preferAvailable = true)
-                    }
-                }
-
-                if (playlistFeed.isEmpty()) {
-                    binding.sortBTN.isGone = true
-                } else {
-                    binding.sortBTN.isVisible = true
-                    binding.sortBTN.setOnClickListener {
-                        BaseBottomSheet().apply {
-                            setItems(sortOptions) { index ->
-                                selectedSortOrder = index
-                                binding.sortBTN.text =
-                                    sortOptions[index].title.getText(requireContext())
-                                showPlaylistVideos()
-                            }
-                        }.show(childFragmentManager)
-                    }
-                }
-
-                binding.sortBTN.text =
-                    sortOptions[selectedSortOrder].title.getText(requireContext())
-            }
-
-            if (online) updatePlaylistBookmark(response)
         }
     }
 
-    private fun navigateVideo(streamItem: StreamItem, queue: List<StreamItem>, preferAvailable: Boolean = false) {
-        val videoId = streamItem.url?.toID() ?: return
+    private fun showOptions() {
+        val playlist = currentPlaylist ?: return
+        val sheet = PlaylistOptionsBottomSheet()
+        sheet.arguments = bundleOf(
+            IntentData.playlistId to playlistId,
+            IntentData.playlistName to playlistName.orEmpty(),
+            IntentData.playlistType to playlistType,
+            IntentData.playlistThumbnail to playlist.thumbnailUrl,
+        )
+        val manager = (requireActivity() as BaseActivity).supportFragmentManager
+        manager.setFragmentResultListener(
+            PlaylistOptionsBottomSheet.PLAYLIST_OPTIONS_REQUEST_KEY, viewLifecycleOwner
+        ) { _, result ->
+            result.getString(IntentData.playlistDescription)?.let {
+                playlist.description = it
+                binding.playlistDescription.text = it
+                binding.playlistDescription.isVisible = it.isNotBlank()
+            }
+            result.getString(IntentData.playlistName)?.let {
+                binding.playlistName.text = it
+                playlistName = it
+            }
+            if (result.getBoolean(IntentData.playlistTask)) findNavController().popBackStack()
+        }
+        sheet.show(manager)
+    }
+
+    private fun startPlayback(items: List<StreamItem>, clicked: StreamItem? = null) {
+        if (items.isEmpty()) return
         val context = requireContext()
         viewLifecycleOwner.lifecycleScope.launch {
             val offline = !NetworkHelper.isNetworkAvailable(context)
-            val selected = if (offline && preferAvailable) {
-                DownloadHelper.getDownloadedAudioQueue(queue.mapNotNull { it.url?.toID() }).firstOrNull()?.download?.videoId
-            } else videoId
-            if (selected == null) {
+            val eligible = if (offline) {
+                val ids = items.mapNotNull { it.url?.toID() }
+                val ready = DownloadHelper.getDownloadedAudioQueue(ids).mapTo(mutableSetOf()) { it.download.videoId }
+                items.filter { it.url?.toID() in ready }
+            } else items
+            val first = (clicked ?: eligible.firstOrNull())?.takeIf { it in eligible }
+            val id = first?.url?.toID()
+            if (id == null) {
                 context.toastFromMainDispatcher(R.string.audio_not_downloaded)
                 return@launch
             }
-            PlayingQueue.setStreams(queue)
-            NavigationHelper.navigateVideo(context, PlayerData(selected, playlistId = playlistId, keepQueue = true,
-                playlistNextPage = nextPage, queueName = playlistName))
+            PlayingQueue.setStreams(eligible)
+            NavigationHelper.navigateVideo(context, PlayerData(
+                id, playlistId = playlistId, keepQueue = true, queueName = playlistName, isOffline = offline
+            ))
         }
     }
 
-    private fun startVideoItemPlayback(streamItem: StreamItem) {
-        navigateVideo(streamItem, getSortedVideos().map { it.item })
+    private fun authorKey(item: StreamItem): String =
+        item.uploaderUrl?.takeIf { it.isNotBlank() }?.toID()?.let { "id:$it" }
+            ?: "name:" + item.uploaderName.orEmpty().trim().lowercase()
+
+    private fun authorName(item: StreamItem): String =
+        item.uploaderName?.takeIf { it.isNotBlank() } ?: getString(R.string.unknown_playlist_author)
+
+    private fun chooseAuthor() {
+        val authors = playlistFeed.distinctBy(::authorKey)
+            .sortedBy { authorName(it).lowercase() }
+        val sameName = authors.groupingBy { authorName(it).lowercase() }.eachCount()
+        val labels = authors.map {
+            val name = authorName(it)
+            if (sameName[name.lowercase()] == 1) name else "$name · ${it.uploaderUrl?.toID().orEmpty()}"
+        }
+        val keys = listOf(null) + authors.map(::authorKey)
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.filter_playlist_author)
+            .setSingleChoiceItems(
+                (listOf(getString(R.string.all_playlist_authors)) + labels).toTypedArray(),
+                keys.indexOf(selectedAuthor)
+            ) { dialog, index ->
+                selectedAuthor = keys[index]
+                showPlaylistVideos()
+                dialog.dismiss()
+            }.show()
     }
 
-    /**
-     * If the playlist is bookmarked, update its content if modified by the uploader
-     */
-    private suspend fun updatePlaylistBookmark(playlist: Playlist) {
-        if (!isBookmarked) return
-        withContext(Dispatchers.IO) {
-            // update the playlist thumbnail and title if bookmarked
-            val playlistBookmark =
-                UserDataRepositoryHelper.userDataRepository.getPlaylistBookmark(playlistId)
-                    ?: return@withContext
-            if (playlistBookmark.thumbnailUrl != playlist.thumbnailUrl ||
-                playlistBookmark.playlistName != playlist.name ||
-                playlistBookmark.videos != playlist.videos
-            ) {
-                val bookmark = playlist.toPlaylistBookmark(playlistBookmark.playlistId)
-                UserDataRepositoryHelper.userDataRepository.createPlaylistBookmark(bookmark)
-            }
+    private fun visibleTracks(): List<PlaylistItem> {
+        val query = playlistViewModel.searchQuery.value.orEmpty()
+        val filtered = playlistFeed.mapIndexed(::indexedItem).filter { (item, _) ->
+            (selectedAuthor == null || authorKey(item) == selectedAuthor) &&
+                (item.title.orEmpty().contains(query, ignoreCase = true) ||
+                    item.uploaderName.orEmpty().contains(query, ignoreCase = true))
+        }
+        return when (selectedSortOrder) {
+            1 -> filtered.reversed()
+            2 -> filtered.sortedBy { it.item.duration }
+            3 -> filtered.sortedByDescending { it.item.duration }
+            4 -> filtered.sortedBy { it.item.title?.lowercase() }
+            5 -> filtered.sortedByDescending { it.item.title?.lowercase() }
+            6 -> filtered.sortedBy { it.item.uploaderName.orEmpty().lowercase() }
+            7 -> filtered.sortedByDescending { it.item.uploaderName.orEmpty().lowercase() }
+            else -> filtered
         }
     }
 
-    private fun getSortedVideos(): List<PlaylistItem> {
-        // in addition to sorting, we need to make sure that the original index of the item
-        // is still known. We solve this by wrapping the StreamItems into PlaylistItems that contain
-        // an additional index attribute.
-        val items = playlistFeed.mapIndexed { index, item -> PlaylistItem(item, index) }
+    private fun indexedItem(index: Int, item: StreamItem) = PlaylistItem(item, index)
 
-        return when {
-            selectedSortOrder in listOf(0, 1) || playlistType == PlaylistType.PUBLIC -> {
-                items
-            }
-
-            selectedSortOrder in listOf(2, 3) -> {
-                items.sortedBy { it.item.duration }
-            }
-
-            selectedSortOrder in listOf(4, 5) -> {
-                items.sortedBy { it.item.title }
-            }
-
-            else -> throw IllegalArgumentException()
-        }.let {
-            if (selectedSortOrder % 2 == 0) it else it.reversed()
+    private fun showPlaylistVideos(restoreScroll: Boolean = false) {
+        val playlist = currentPlaylist ?: return
+        val items = visibleTracks()
+        playlistAdapter?.submitList(items) {
+            if (restoreScroll) _binding?.playlistRecView?.layoutManager?.onRestoreInstanceState(recyclerViewState)
+            loadVisibleDates()
         }
+        binding.sortBTN.text = sortOptions.getOrElse(selectedSortOrder) { sortOptions.first() }.title.getText(requireContext())
+        val author = playlistFeed.firstOrNull { authorKey(it) == selectedAuthor }
+        binding.authorFilter.text = author?.let(::authorName) ?: getString(R.string.all_playlist_authors)
+        binding.authorFilter.contentDescription = getString(R.string.filter_playlist_author) + ", " + binding.authorFilter.text
+        binding.authorFilter.isEnabled = playlistFeed.isNotEmpty()
+        binding.playAll.isEnabled = items.isNotEmpty()
+        binding.shuffle.isEnabled = items.isNotEmpty()
+        binding.nothingHere.isVisible = items.isEmpty() && (snapshotComplete || playlist.videos <= 0)
+        binding.nothingHere.setText(if (!snapshotComplete && playlistFeed.isEmpty()) R.string.bookmark_retry else R.string.emptyList)
+        binding.snapshotStatus.isVisible = !snapshotComplete
+        binding.snapshotStatus.text = getString(R.string.bookmark_partial, playlistFeed.size)
+        updatePlaylistDuration(items)
     }
 
-    private fun showPlaylistVideos() {
-        var videos = getSortedVideos()
+    private fun loadVisibleDates() {
+        val adapter = playlistAdapter ?: return
+        val manager = _binding?.playlistRecView?.layoutManager as? LinearLayoutManager ?: return
+        val first = manager.findFirstVisibleItemPosition().coerceAtLeast(0)
+        val ids = adapter.currentList.drop(first).take(10).mapNotNull { (track, _) ->
+            if (track.publicationDate() == null) track.url?.toID() else null
+        }.distinct()
+        if (ids.isEmpty()) return
 
-        val query = playlistViewModel.searchQuery.value
-        if (!query.isNullOrEmpty()) {
-            videos = videos.filter {
-                it.item.title.orEmpty()
-                    .contains(query, ignoreCase = true) || it.item.uploaderName.orEmpty()
-                    .contains(query, ignoreCase = true)
+        datesJob?.cancel()
+        datesJob = viewLifecycleOwner.lifecycleScope.launch {
+            safelyLoad {
+                val dao = Database.playlistBookmarkDao()
+                val saved = dao.publicationDates(ids).associate { it.videoId to it.publicationDate }
+                adapter.setPublicationDates(saved)
+                if (dateSourceUnavailable || !NetworkHelper.isNetworkAvailable(requireContext())) return@safelyLoad
+                for (id in ids) {
+                    if (adapter.hasPublicationDate(id) || id in triedDates || !ID_PATTERN.matches(id)) continue
+                    val streams = try {
+                        withTimeoutOrNull(8_000) { MediaServiceRepository.instance.getStreams(id) }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.d(TAG(), "Publication date unavailable for $id", e)
+                        null
+                    }
+                    if (streams == null) {
+                        dateSourceUnavailable = true
+                        break
+                    }
+                    triedDates.add(id)
+                    val date = streams.uploadTimestamp?.toLocalDate()?.toString() ?: continue
+                    dao.savePublicationDate(TrackPublicationDate(id, date))
+                    adapter.setPublicationDates(mapOf(id to date))
+                }
             }
         }
-
-        playlistAdapter?.submitList(videos)
-
-        updatePlaylistDuration(videos)
     }
 
     @SuppressLint("StringFormatInvalid")
@@ -470,9 +573,7 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
 
     private suspend fun refreshLocalPlaylist() {
         val playlist = withContext(Dispatchers.IO) { PlaylistsHelper.getPlaylist(playlistId, PlaylistType.PRIVATE) }
-        playlistFeed = playlist.relatedStreams.toMutableList()
-        binding.playlistInfo.text = getChannelAndVideoString(playlist, playlistFeed.size)
-        showPlaylistVideos()
+        display(playlist, complete = true)
     }
 
     private fun getChannelAndVideoString(playlist: Playlist, count: Int): String {
@@ -482,49 +583,20 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
         return getString(R.string.uploaderAndVideoCount, playlist.uploader, count)
     }
 
-    private fun fetchNextPage() {
-        if (nextPage == null || isLoading) return
-        isLoading = true
-
-        lifecycleScope.launch {
-            val response = try {
-                withContext(Dispatchers.IO) {
-                    // load locally stored playlists with the auth api
-                    MediaServiceRepository.instance.getPlaylistNextPage(playlistId, nextPage!!)
-                }
-            } catch (e: Exception) {
-                context?.toastFromMainDispatcher(e.localizedMessage.orEmpty())
-                Log.e(TAG(), e.toString())
-                return@launch
-            }
-
-            nextPage = response.nextpage
-            withContext(Dispatchers.IO) {
-                Database.downloadDao().insertPlaylistVideoConnections(response.relatedStreams.mapNotNull { stream ->
-                    stream.url?.toID()?.let { DownloadPlaylistVideosCrossRef(playlistId = playlistId, videoId = it) }
-                })
-            }
-            playlistFeed.addAll(response.relatedStreams)
-            val currentList = playlistAdapter?.currentList.orEmpty()
-            val newList = currentList + response.relatedStreams.mapIndexed { index, item ->
-                PlaylistItem(item, currentList.size + index)
-            }
-            playlistAdapter?.submitList(newList)
-            updatePlaylistDuration(newList)
-            isLoading = false
-        }
-    }
-
     @SuppressLint("SetTextI18n")
     private fun updatePlaylistDuration(updatedList: List<PlaylistItem>) {
         val totalDuration = updatedList.sumOf { it.item.duration ?: 0 }
         binding.playlistDuration.text = DateUtils.formatElapsedTime(totalDuration) +
-                if (nextPage != null) "+" else ""
+                if (!snapshotComplete && updatedList.isNotEmpty()) "+" else ""
+    }
+
+    private companion object {
+        val ID_PATTERN = Regex("[A-Za-z0-9_-]{11}")
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         // manually restore the recyclerview state due to https://github.com/material-components/material-components-android/issues/3473
-        binding.playlistRecView.layoutManager?.onRestoreInstanceState(recyclerViewState)
+        _binding?.playlistRecView?.layoutManager?.onRestoreInstanceState(recyclerViewState)
     }
 }

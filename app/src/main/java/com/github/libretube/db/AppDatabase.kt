@@ -14,6 +14,7 @@ import com.github.libretube.db.dao.SubscriptionGroupsDao
 import com.github.libretube.db.dao.SubscriptionsFeedDao
 import com.github.libretube.db.dao.WatchHistoryDao
 import com.github.libretube.db.dao.WatchPositionDao
+import com.github.libretube.db.obj.BookmarkSnapshot
 import com.github.libretube.db.obj.CustomInstance
 import com.github.libretube.db.obj.Download
 import com.github.libretube.db.obj.DownloadChapter
@@ -27,6 +28,7 @@ import com.github.libretube.db.obj.PlaylistBookmark
 import com.github.libretube.db.obj.SearchHistoryItem
 import com.github.libretube.db.obj.SubscriptionGroup
 import com.github.libretube.db.obj.SubscriptionsFeedItem
+import com.github.libretube.db.obj.TrackPublicationDate
 import com.github.libretube.db.obj.WatchHistoryItem
 import com.github.libretube.db.obj.WatchPosition
 
@@ -38,6 +40,8 @@ import com.github.libretube.db.obj.WatchPosition
         CustomInstance::class,
         LocalSubscription::class,
         PlaylistBookmark::class,
+        BookmarkSnapshot::class,
+        TrackPublicationDate::class,
         LocalPlaylist::class,
         LocalPlaylistItem::class,
         Download::class,
@@ -48,7 +52,7 @@ import com.github.libretube.db.obj.WatchPosition
         SubscriptionGroup::class,
         SubscriptionsFeedItem::class
     ],
-    version = 26,
+    version = 27,
     autoMigrations = [
         AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9),
@@ -61,6 +65,7 @@ import com.github.libretube.db.obj.WatchPosition
         AutoMigration(from = 23, to = 24, spec = DatabaseHolder.MIGRATION_23_24::class),
         AutoMigration(from = 24, to = 25),
         AutoMigration(from = 25, to = 26, spec = DatabaseHolder.MIGRATION_25_26::class),
+        AutoMigration(from = 26, to = 27),
     ]
 )
 @TypeConverters(Converters::class)

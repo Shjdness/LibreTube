@@ -8,6 +8,7 @@ import com.github.libretube.db.obj.WatchHistoryItem
 import com.github.libretube.extensions.toID
 import com.github.libretube.extensions.toLocalDate
 import com.github.libretube.helpers.ProxyHelper
+import kotlinx.datetime.LocalDate
 import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
 import kotlin.time.Clock
@@ -33,6 +34,9 @@ data class StreamItem(
     val isLive get() = !isShort && ((duration == null) || (duration <= 0L))
     val isUpcoming get() = uploaded > System.currentTimeMillis()
 
+    fun publicationDate(): String? =
+        uploadedDate?.substringBefore('T')?.let { runCatching { LocalDate.parse(it).toString() }.getOrNull() }
+
     fun toLocalPlaylistItem(playlistId: String): LocalPlaylistItem {
         return LocalPlaylistItem(
             playlistId = playlistId.toInt(),
@@ -42,7 +46,7 @@ data class StreamItem(
             uploader = uploaderName,
             uploaderUrl = uploaderUrl,
             uploaderAvatar = uploaderAvatar?.let { ProxyHelper.unwrapUrl(it) },
-            uploadDate = uploadedDate,
+            uploadDate = publicationDate() ?: uploadedDate,
             duration = duration
         )
     }
