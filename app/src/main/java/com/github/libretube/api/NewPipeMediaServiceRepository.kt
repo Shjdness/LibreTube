@@ -257,12 +257,12 @@ class NewPipeMediaServiceRepository : MediaServiceRepository {
         return info.relatedItems.filterIsInstance<StreamInfoItem>().map { it.toStreamItem() }
     }
 
-    override suspend fun getStreams(videoId: String): Streams = withContext(Dispatchers.IO) {
+    override suspend fun getStreams(videoId: String, includeDislikes: Boolean): Streams = withContext(Dispatchers.IO) {
         val respAsync = async {
             StreamInfo.getInfo("$YOUTUBE_FRONTEND_URL/watch?v=$videoId")
         }
         val dislikesAsync = async {
-            if (PlayerHelper.localRYD) runCatching {
+            if (includeDislikes && PlayerHelper.localRYD) runCatching {
                 RetrofitInstance.externalApi.getVotes(videoId).dislikes
             }.getOrElse { -1 } else -1
         }

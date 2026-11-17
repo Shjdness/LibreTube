@@ -578,4 +578,7 @@
     <string name="playlist_author_descending">作者 Z–A</string>
     <string name="playlist_original_order">播单原顺序</string>
     <string name="followed_channels">关注频道</string>
+    <string name="previous_audio_track">上一首</string>
+    <string name="next_audio_track">下一首</string>
+    <string name="loading_audio_track">正在加载 %1$s</string>
 </resources>

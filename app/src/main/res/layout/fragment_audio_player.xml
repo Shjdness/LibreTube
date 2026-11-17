@@ -150,6 +150,7 @@
                 android:layout_height="wrap_content"
                 android:gravity="center"
                 app:iconGravity="textStart"
+                android:contentDescription="@string/previous_audio_track"
                 app:icon="@drawable/ic_prev" />
 
             <com.google.android.material.slider.Slider
@@ -166,6 +167,7 @@
                 android:layout_height="wrap_content"
                 android:gravity="center"
                 app:iconGravity="textStart"
+                android:contentDescription="@string/next_audio_track"
                 app:icon="@drawable/ic_next" />
 
         </LinearLayout>

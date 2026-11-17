@@ -5,5 +5,6 @@ enum class PlayerCommand {
     SET_AUDIO_ROLE_FLAGS,
     SET_AUDIO_LANGUAGE,
     PLAY_NEXT_VIDEO,
+    PLAY_PREVIOUS_VIDEO,
     PLAY_VIDEO_BY_ID,
 }

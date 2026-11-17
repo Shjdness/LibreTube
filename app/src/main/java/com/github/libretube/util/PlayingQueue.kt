@@ -49,7 +49,7 @@ object PlayingQueue {
         clearJobs()
         synchronized(queue) {
             val newQueue = queue.filterIndexed { index, item -> index <= currentIndex() }
-            setStreams(newQueue)
+            queue.retainAll(newQueue)
         }
     }
 
@@ -94,8 +94,9 @@ object PlayingQueue {
     fun adjacentIds(current: String?, reverse: Boolean = false, repeatAll: Boolean = repeatMode == Player.REPEAT_MODE_ALL): List<String> = synchronized(queue) {
         val ordered = queue.mapNotNull { it.url?.toID() }.let { if (reverse) it.asReversed() else it }
         val index = ordered.indexOf(current)
+        if (index < 0) return@synchronized emptyList()
         val remaining = ordered.drop(index + 1)
-        if (index >= 0 && repeatAll) remaining + ordered.take(index)
+        if (repeatAll) remaining + ordered.take(index)
         else remaining
     }
 
@@ -130,10 +131,10 @@ object PlayingQueue {
     // only returns a copy of the queue, no write access
     fun getStreams() = synchronized(queue) { queue.toList() }
 
-    fun setStreams(streams: List<StreamItem>) = synchronized(queue) {
+    fun setStreams(streams: List<StreamItem>, keepCurrent: Boolean = false) = synchronized(queue) {
         clearJobs()
         queue.clear()
-        currentStream = null
+        if (!keepCurrent) currentStream = null
         queue.addAll(streams.distinctBy { it.url?.toID() })
     }
 

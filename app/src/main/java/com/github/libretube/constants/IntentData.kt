@@ -4,6 +4,7 @@ object IntentData {
     const val downloadData = "downloadData"
     const val playerData = "playerData"
     const val id = "id"
+    const val loadingAudioTitle = "loadingAudioTitle"
     const val videoId = "videoId"
     const val videoIds = "videoIds"
     const val videoTitle = "videoTitle"

@@ -512,7 +512,7 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
                 for (id in ids) {
                     if (adapter.hasPublicationDate(id) || id in triedDates || !ID_PATTERN.matches(id)) continue
                     val streams = try {
-                        withTimeoutOrNull(8_000) { MediaServiceRepository.instance.getStreams(id) }
+                        withTimeoutOrNull(8_000) { MediaServiceRepository.instance.getStreams(id, includeDislikes = false) }
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

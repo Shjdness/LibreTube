@@ -2,6 +2,7 @@ package com.github.libretube.services
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
 import androidx.core.net.toUri
@@ -49,7 +50,6 @@ import com.github.libretube.player.SabrMediaSource
 import com.github.libretube.player.manifest.SabrManifest
 import com.github.libretube.repo.UserDataRepositoryHelper
 import com.github.libretube.ui.activities.MainActivity
-import com.github.libretube.util.DeArrowUtil
 import com.github.libretube.util.DefaultTrackSelectorWithAudioQualitySupport
 import com.github.libretube.util.NowPlayingNotification
 import com.github.libretube.util.PlaybackStateStore
@@ -59,6 +59,8 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -84,6 +86,18 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
     private var explicitlyStopped = false
     private var switchingSource = false
     private var sourceGeneration = 0
+    private var nextPreparation: NextPreparation? = null
+    private var automaticTransition = false
+    private val failedAutomaticTracks = mutableSetOf<String>()
+    private var transitionStartedAt = 0L
+    private var waitingForSoundSince = 0L
+
+    private data class ResolvedAudio(val track: StreamItem, val source: MediaSource, val local: Boolean)
+
+    private class NextPreparation(val id: String, val task: Deferred<ResolvedAudio?>) {
+        var queued: ResolvedAudio? = null
+        var precedingDurationMs = 0L
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -99,10 +113,21 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
             setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
         }
         player = PlayerHelper.createPlayer(this, trackSelector)
+        player.setPreloadConfiguration(ExoPlayer.PreloadConfiguration(5_000_000L))
+        scope.launch {
+            while (isActive) {
+                delay(300)
+                prepareFollowingTrack()
+            }
+        }
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 checkpointJob?.cancel()
                 if (isPlaying) {
+                    if (waitingForSoundSince != 0L) {
+                        Log.d(TAG, "Audio playing $currentId in ${SystemClock.elapsedRealtime() - waitingForSoundSince}ms")
+                        waitingForSoundSince = 0
+                    }
                     checkpointJob = scope.launch {
                         while (isActive) {
                             checkpoint()
@@ -120,25 +145,46 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
                 if (reason == Player.DISCONTINUITY_REASON_SEEK) checkpoint()
             }
 
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val next = nextPreparation ?: return
+                val audio = next.queued ?: return
+                if (mediaItem?.mediaId != next.id) return
+                nextPreparation = null
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && next.id != automaticCandidates().firstOrNull()) {
+                    player.pause()
+                    val previous = player.currentMediaItemIndex - 1
+                    if (previous >= 0) {
+                        player.seekTo(previous, next.precedingDurationMs)
+                        clearNextPreparation()
+                    }
+                    playAdjacent(automatic = true)
+                    if (PlayingQueue.repeatMode == Player.REPEAT_MODE_ONE && PlayerHelper.autoPlayEnabled) {
+                        player.seekTo(0)
+                        player.play()
+                    }
+                    return
+                }
+                transitionStartedAt = SystemClock.elapsedRealtime()
+                waitingForSoundSince = transitionStartedAt
+                automaticTransition = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO
+                onTrackSelected(next.id, audio)
+                if (player.currentMediaItemIndex > 0) player.removeMediaItems(0, player.currentMediaItemIndex)
+                if (player.playbackState == Player.STATE_READY) recordReady()
+            }
+
             override fun onPlaybackStateChanged(state: Int) {
                 when (state) {
                     Player.STATE_READY -> {
-                        val played = PlayingQueue.getCurrent()
-                        checkpoint()
-                        if (played != null && PlayerHelper.watchHistoryEnabled && player.playWhenReady) {
-                            val entry = played.toWatchHistoryEntry(player.currentPosition)
-                            scope.launch(Dispatchers.IO) {
-                                runCatching { UserDataRepositoryHelper.userDataRepository.addToWatchHistory(entry) }
-                            }
-                        }
+                        recordReady()
                     }
                     Player.STATE_ENDED -> {
+                        if (switchingSource || explicitlyStopped || !player.playWhenReady) return
                         checkpoint()
                         if (PlayingQueue.repeatMode == Player.REPEAT_MODE_ONE) {
                             player.seekTo(0)
                             player.play()
                         } else if (PlayerHelper.autoPlayEnabled) {
-                            playAdjacent()
+                            playAdjacent(automatic = true)
                         }
                     }
                 }
@@ -146,6 +192,14 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
 
             override fun onPlayerError(error: PlaybackException) {
                 Log.w("AudioPlaybackService", "Audio source failed", error)
+                val id = currentId
+                if (automaticTransition && id != null) {
+                    failedAutomaticTracks.add(id)
+                    if (automaticCandidates().isNotEmpty()) {
+                        playAdjacent(automatic = true)
+                        return
+                    }
+                }
                 toastFromMainThread(R.string.audio_stream_unavailable)
                 checkpoint()
             }
@@ -163,7 +217,8 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
             .setAvailableSessionCommands(commands.availableSessionCommands.buildUpon()
                 .add(startServiceCommand).add(stopServiceCommand).add(runPlayerActionCommand).build())
             .setAvailablePlayerCommands(commands.availablePlayerCommands.buildUpon()
-                .add(Player.COMMAND_SEEK_TO_NEXT).add(Player.COMMAND_SEEK_TO_PREVIOUS).build())
+                .addAll(Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_PREVIOUS,
+                    Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM).build())
             .build()
     }
 
@@ -208,18 +263,89 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
                     args.getString(PlayerCommand.PLAY_VIDEO_BY_ID.name)?.toID()?.let { launchSource(listOf(it)) }
                 }
                 args.containsKey(PlayerCommand.PLAY_NEXT_VIDEO.name) -> playAdjacent()
+                args.containsKey(PlayerCommand.PLAY_PREVIOUS_VIDEO.name) -> playAdjacent(reverse = true)
             }
             else -> return super.onCustomCommand(session, controller, customCommand, args)
         }
         return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
     }
 
-    private fun playAdjacent(reverse: Boolean = false) {
-        val candidates = PlayingQueue.adjacentIds(currentId, reverse)
-        if (candidates.isNotEmpty()) launchSource(candidates)
-        else if (PlayingQueue.repeatMode == Player.REPEAT_MODE_ALL && PlayingQueue.size() == 1 && currentId != null) {
-            player.seekTo(0)
+    private fun automaticCandidates(): List<String> {
+        if (!PlayerHelper.autoPlayEnabled || PlayingQueue.repeatMode == Player.REPEAT_MODE_ONE) return emptyList()
+        return PlayingQueue.adjacentIds(currentId).filterNot(failedAutomaticTracks::contains)
+    }
+
+    private fun playAdjacent(reverse: Boolean = false, automatic: Boolean = false) {
+        val candidates = if (automatic) automaticCandidates() else PlayingQueue.adjacentIds(currentId, reverse).take(1)
+        if (candidates.isEmpty()) {
+            if (automatic && PlayingQueue.repeatMode == Player.REPEAT_MODE_ALL && PlayingQueue.size() == 1) {
+                player.seekTo(0)
+                player.play()
+            }
+            return
+        }
+        val next = nextPreparation
+        if (!automatic && !switchingSource && next?.id == candidates.first() && next.queued != null &&
+            player.mediaItemCount > player.currentMediaItemIndex + 1
+        ) {
+            player.seekTo(player.currentMediaItemIndex + 1, C.TIME_UNSET)
             player.play()
+        } else {
+            launchSource(candidates, explicitPosition = 0, automatic = automatic, reusePreparation = true)
+        }
+    }
+
+    private fun clearNextPreparation(keep: Deferred<ResolvedAudio?>? = null) {
+        nextPreparation?.task?.takeUnless { it === keep }?.cancel()
+        nextPreparation = null
+        val firstToRemove = player.currentMediaItemIndex + 1
+        if (firstToRemove < player.mediaItemCount) player.removeMediaItems(firstToRemove, player.mediaItemCount)
+    }
+
+    private fun prepareFollowingTrack() {
+        val id = automaticCandidates().firstOrNull()
+        val current = currentId
+        if (id != nextPreparation?.id) clearNextPreparation()
+        if (id == null || current == null || nextPreparation != null || switchingSource ||
+            !player.isPlaying || player.duration <= 0 || player.duration - player.currentPosition > 25_000
+        ) return
+
+        val task = scope.async { resolveAudio(id) }
+        val preparation = NextPreparation(id, task)
+        nextPreparation = preparation
+        scope.launch {
+            val audio = task.await() ?: return@launch
+            if (nextPreparation !== preparation || switchingSource || currentId != current ||
+                automaticCandidates().firstOrNull() != id
+            ) return@launch
+            preparation.queued = audio
+            preparation.precedingDurationMs = player.duration.coerceAtLeast(0)
+            player.addMediaSource(audio.source)
+            Log.d(TAG, "Prepared following audio $id")
+        }
+    }
+
+    private suspend fun resolveAudio(id: String): ResolvedAudio? {
+        val start = SystemClock.elapsedRealtime()
+        return try {
+            val local = withContext(Dispatchers.IO) { Database.downloadDao().findById(id) }
+            val audio = local?.finishedAudio
+            if (local != null && audio != null) {
+                val item = MediaItem.Builder().setMediaId(id).setUri(audio.path.toAndroidUri()).setMetadata(local).build()
+                val source = ProgressiveMediaSource.Factory(FileDataSource.Factory()).createMediaSource(item)
+                return ResolvedAudio(local.download.toStreamItem(), source, local = true)
+            }
+            if (localOnly || !NetworkHelper.isNetworkAvailable(this)) return null
+            val streams = MediaServiceRepository.instance.getStreams(id, includeDislikes = false)
+            val source = onlineSource(id, streams) ?: return null
+            ResolvedAudio(streams.toStreamItem(id), source, local = false)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not resolve audio for $id", e)
+            null
+        } finally {
+            Log.d(TAG, "Resolved or rejected $id in ${SystemClock.elapsedRealtime() - start}ms")
         }
     }
 
@@ -227,73 +353,93 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
         candidates: List<String>,
         autoPlay: Boolean = true,
         explicitPosition: Long? = null,
-        request: PlayerData? = null
+        request: PlayerData? = null,
+        automatic: Boolean = false,
+        reusePreparation: Boolean = false
     ) {
         val generation = ++sourceGeneration
         sourceJob?.cancel()
+        val next = nextPreparation?.takeIf { reusePreparation && it.id == candidates.firstOrNull() }
+        clearNextPreparation(next?.task)
+        if (!automatic) failedAutomaticTracks.clear()
         checkpoint()
+        val shouldResumeOnFailure = player.isPlaying
         switchingSource = true
         player.pause()
+        transitionStartedAt = SystemClock.elapsedRealtime()
+        waitingForSoundSince = transitionStartedAt
         sourceJob = scope.launch {
             try {
                 for (id in candidates) {
-                    val local = withContext(Dispatchers.IO) { Database.downloadDao().findById(id) }
-                    val audio = local?.finishedAudio
-                    if (local != null && audio != null) {
-                        val item = MediaItem.Builder().setUri(audio.path.toAndroidUri()).setMetadata(local).build()
-                        val source = ProgressiveMediaSource.Factory(FileDataSource.Factory()).createMediaSource(item)
-                        activate(id, local.download.toStreamItem(), source, explicitPosition, autoPlay, local = true)
-                        return@launch
-                    }
-                    if (localOnly || !NetworkHelper.isNetworkAvailable(this@AudioPlaybackService)) continue
-                    val streams = try {
-                        withContext(Dispatchers.IO) {
-                            MediaServiceRepository.instance.getStreams(id).let { DeArrowUtil.deArrowStreams(it, id) }
-                        }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Log.w("AudioPlaybackService", "Could not resolve audio for " + id, e)
+                    val title = PlayingQueue.getStreams().firstOrNull { it.url?.toID() == id }?.title ?: id
+                    setPlaylistMetadata(title)
+                    val audio = if (next?.id == id && next.queued == null) next.task.await() else resolveAudio(id)
+                    if (audio == null) {
+                        if (automatic) failedAutomaticTracks.add(id)
                         continue
                     }
-                    val source = onlineSource(id, streams) ?: continue
-                    val stream = streams.toStreamItem(id)
-                    if (request != null && !request.keepQueue) {
-                        PlayingQueue.updateQueue(stream, request.playlistId, request.channelId)
+                    val position = explicitPosition ?: if (!automatic && PlayerHelper.watchPositionsAudio) {
+                        withContext(Dispatchers.IO) { DatabaseHelper.getWatchPosition(id) }
+                            ?.takeUnless { DatabaseHelper.isVideoWatched(it, audio.track.duration) } ?: 0L
+                    } else 0L
+                    if (request != null && !request.keepQueue && !audio.local) {
+                        PlayingQueue.updateQueue(audio.track, request.playlistId, request.channelId)
                     }
-                    scope.launch(Dispatchers.IO) { runCatching { SubscriptionHelper.submitFeedItemChange(stream.toFeedItem()) } }
-                    activate(id, stream, source, explicitPosition, autoPlay, local = false)
+                    automaticTransition = automatic
+                    onTrackSelected(id, audio)
+                    player.setMediaSource(audio.source, position.coerceAtLeast(0))
+                    player.playWhenReady = autoPlay
+                    switchingSource = false
+                    player.prepare()
+                    checkpoint()
                     return@launch
                 }
                 toastFromMainThread(if (localOnly || !NetworkHelper.isNetworkAvailable(this@AudioPlaybackService))
                     R.string.audio_not_downloaded else R.string.audio_stream_unavailable)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.e("AudioPlaybackService", "Unable to open audio", e)
-                toastFromMainThread(R.string.audio_stream_unavailable)
+                if (!automatic && shouldResumeOnFailure && player.playbackState != Player.STATE_ENDED) player.play()
             } finally {
-                if (generation == sourceGeneration) switchingSource = false
+                next?.task?.cancel()
+                if (generation == sourceGeneration && switchingSource) {
+                    switchingSource = false
+                    waitingForSoundSince = 0
+                    setPlaylistMetadata()
+                }
             }
         }
     }
 
-    private suspend fun activate(
-        id: String, track: StreamItem, source: MediaSource, explicitPosition: Long?, autoPlay: Boolean, local: Boolean
-    ) {
-        val position = explicitPosition ?: if (PlayerHelper.watchPositionsAudio) {
-            withContext(Dispatchers.IO) { DatabaseHelper.getWatchPosition(id) }
-                ?.takeUnless { DatabaseHelper.isVideoWatched(it, track.duration) } ?: 0L
-        } else 0L
+    private fun onTrackSelected(id: String, audio: ResolvedAudio) {
         currentId = id
-        PlayingQueue.updateCurrent(track)
-        player.setWakeMode(if (local) C.WAKE_MODE_LOCAL else C.WAKE_MODE_NETWORK)
-        player.playlistMetadata = MediaMetadata.Builder().setExtras(bundleOf(IntentData.videoId to id)).build()
-        player.setMediaSource(source, position.coerceAtLeast(0))
-        player.playWhenReady = autoPlay
-        switchingSource = false
-        player.prepare()
+        PlayingQueue.updateCurrent(audio.track)
+        player.setWakeMode(if (audio.local) C.WAKE_MODE_LOCAL else C.WAKE_MODE_NETWORK)
+        setPlaylistMetadata()
+        if (!audio.local) scope.launch(Dispatchers.IO) {
+            runCatching { SubscriptionHelper.submitFeedItemChange(audio.track.toFeedItem()) }
+        }
+    }
+
+    private fun setPlaylistMetadata(loadingTitle: String? = null) {
+        player.playlistMetadata = MediaMetadata.Builder().setExtras(bundleOf(
+            IntentData.videoId to currentId,
+            IntentData.loadingAudioTitle to loadingTitle
+        )).build()
+    }
+
+    private fun recordReady() {
         checkpoint()
+        if (transitionStartedAt != 0L) {
+            Log.d(TAG, "Audio ready $currentId in ${SystemClock.elapsedRealtime() - transitionStartedAt}ms")
+            transitionStartedAt = 0
+        }
+        automaticTransition = false
+        failedAutomaticTracks.clear()
+        val played = PlayingQueue.getCurrent()
+        if (played != null && PlayerHelper.watchHistoryEnabled && player.playWhenReady) {
+            val entry = played.toWatchHistoryEntry(player.currentPosition)
+            scope.launch(Dispatchers.IO) {
+                runCatching { UserDataRepositoryHelper.userDataRepository.addToWatchHistory(entry) }
+            }
+        }
     }
 
     private fun checkpoint() {
@@ -306,8 +452,10 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
 
     private fun stopPlayback() {
         explicitlyStopped = true
+        waitingForSoundSince = 0
         sourceJob?.cancel()
         checkpointJob?.cancel()
+        clearNextPreparation()
         PlaybackStateStore.clear(this)
         player.stop()
         player.clearMediaItems()
@@ -348,14 +496,16 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
     }
 
     private inner class QueuePlayer(player: Player) : ForwardingPlayer(player) {
-        override fun hasNextMediaItem() = PlayingQueue.hasNext()
-        override fun hasPreviousMediaItem() = PlayingQueue.hasPrev()
+        override fun hasNextMediaItem() = PlayingQueue.adjacentIds(currentId).isNotEmpty()
+        override fun hasPreviousMediaItem() = PlayingQueue.adjacentIds(currentId, reverse = true).isNotEmpty()
         override fun seekToNext() = playAdjacent()
         override fun seekToPrevious() = playAdjacent(reverse = true)
+        override fun seekToNextMediaItem() = playAdjacent()
+        override fun seekToPreviousMediaItem() = playAdjacent(reverse = true)
         override fun getAvailableCommands(): Player.Commands = super.getAvailableCommands().buildUpon()
-            .addAll(COMMAND_SEEK_TO_PREVIOUS, COMMAND_SEEK_TO_NEXT).build()
-        override fun isCommandAvailable(command: Int): Boolean =
-            command == COMMAND_SEEK_TO_NEXT || command == COMMAND_SEEK_TO_PREVIOUS || super.isCommandAvailable(command)
+            .addAll(COMMAND_SEEK_TO_PREVIOUS, COMMAND_SEEK_TO_NEXT,
+                COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM, COMMAND_SEEK_TO_NEXT_MEDIA_ITEM).build()
+        override fun isCommandAvailable(command: Int): Boolean = getAvailableCommands().contains(command)
     }
 
     private fun onlineSource(videoId: String, streams: Streams): MediaSource? {
@@ -393,9 +543,10 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
     }
 
     private fun createMediaItem(videoId: String, uri: android.net.Uri, mimeType: String?, streams: Streams): MediaItem =
-        MediaItem.Builder().setUri(uri).setMimeType(mimeType).setMetadata(streams, videoId).build()
+        MediaItem.Builder().setMediaId(videoId).setUri(uri).setMimeType(mimeType).setMetadata(streams, videoId).build()
 
     companion object {
+        private const val TAG = "AudioPlaybackService"
         private val VIDEO_ID = Regex("[A-Za-z0-9_-]{11}")
         @Volatile var active = false
             private set

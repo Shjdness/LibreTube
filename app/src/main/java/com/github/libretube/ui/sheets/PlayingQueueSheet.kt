@@ -148,7 +148,7 @@ class PlayingQueueSheet : ExpandedBottomSheet(R.layout.queue_bottom_sheet) {
                     4 -> PlayingQueue.getStreams().reversed()
                     else -> throw IllegalArgumentException()
                 }
-                PlayingQueue.setStreams(newQueue)
+                PlayingQueue.setStreams(newQueue, keepCurrent = true)
                 _binding?.optionsRecycler?.adapter?.notifyDataSetChanged()
             }
             .show()

@@ -59,6 +59,8 @@ import com.github.libretube.ui.sheets.PlayingQueueSheet
 import com.github.libretube.ui.sheets.SleepTimerSheet
 import com.github.libretube.ui.sheets.VideoOptionsBottomSheet
 import com.github.libretube.util.DataSaverMode
+import com.github.libretube.util.DeArrowUtil
+import kotlinx.coroutines.Job
 import com.github.libretube.util.PlayingQueue
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
@@ -82,6 +84,9 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
     private var isPaused = !PlayerHelper.playAutomatically
 
     private var playerController: MediaController? = null
+    private var artworkJob: Job? = null
+    private var brandingJob: Job? = null
+    private var brandedTitle: String? = null
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -136,11 +141,11 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         }
 
         binding.prev.setOnClickListener {
-            playerController?.seekToPrevious()
+            skipTrack(PlayerCommand.PLAY_PREVIOUS_VIDEO)
         }
 
         binding.next.setOnClickListener {
-            playerController?.seekToNext()
+            skipTrack(PlayerCommand.PLAY_NEXT_VIDEO)
         }
 
         binding.rewindBTN.setOnClickListener {
@@ -321,8 +326,10 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
     private fun updateStreamInfo(metadata: MediaMetadata) {
         val binding = _binding ?: return
 
-        binding.title.text = metadata.title
-        binding.miniPlayerTitle.text = metadata.title
+        artworkJob?.cancel()
+        brandingJob?.cancel()
+        brandedTitle = null
+        updateTrackControls()
 
         binding.uploader.text = metadata.artist
         binding.uploader.setOnClickListener {
@@ -331,11 +338,21 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         }
 
         metadata.artworkUri?.let { updateThumbnailAsync(it) }
-
+        val id = metadata.extras?.getString(IntentData.videoId)
+        if (id != null && metadata.artworkUri?.scheme?.startsWith("http") == true) {
+            brandingJob = viewLifecycleOwner.lifecycleScope.launch {
+                val (title, thumbnail) = DeArrowUtil.deArrowVideoId(id) ?: return@launch
+                if (playerController?.mediaMetadata?.extras?.getString(IntentData.videoId) != id) return@launch
+                brandedTitle = title
+                updateTrackControls()
+                thumbnail?.let { updateThumbnailAsync(Uri.parse(it)) }
+            }
+        }
         initializeSeekBar()
     }
 
     private fun updateThumbnailAsync(thumbnailUri: Uri) {
+        artworkJob?.cancel()
         if (DataSaverMode.isEnabled(requireContext()) && thumbnailUri.scheme?.startsWith("http") == true) {
             binding.progress.isVisible = false
             binding.thumbnail.setImageResource(R.drawable.ic_launcher_monochrome)
@@ -352,7 +369,7 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         // reset color filter if data saver mode got toggled or conditions for it changed
         binding.thumbnail.setColorFilter(Color.TRANSPARENT)
 
-        lifecycleScope.launch {
+        artworkJob = viewLifecycleOwner.lifecycleScope.launch {
             val binding = _binding ?: return@launch
             val bitmap = ImageHelper.getImage(requireContext(), thumbnailUri)
             binding.thumbnail.setImageBitmap(bitmap)
@@ -373,9 +390,30 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
     /**
      * Update the position, duration and text views belonging to the seek bar
      */
+    private fun skipTrack(command: PlayerCommand) {
+        playerController?.sendCustomCommand(
+            AudioPlaybackService.runPlayerActionCommand,
+            bundleOf(command.name to true)
+        )
+    }
+
+    private fun updateTrackControls() {
+        val binding = _binding ?: return
+        val controller = playerController ?: return
+        val id = controller.mediaMetadata.extras?.getString(IntentData.videoId)
+        binding.prev.isEnabled = PlayingQueue.adjacentIds(id, reverse = true).isNotEmpty()
+        binding.next.isEnabled = PlayingQueue.adjacentIds(id).isNotEmpty()
+        val loading = controller.playlistMetadata.extras?.getString(IntentData.loadingAudioTitle)
+        val title = loading?.let { getString(R.string.loading_audio_track, it) }
+            ?: brandedTitle ?: controller.mediaMetadata.title
+        if (binding.title.text != title) binding.title.text = title
+        if (binding.miniPlayerTitle.text != title) binding.miniPlayerTitle.text = title
+    }
+
     private fun updateSeekBar() {
         val binding = _binding ?: return
         handler.removeCallbacks(refreshPosition)
+        updateTrackControls()
         val duration = playerController?.duration?.takeIf { it > 0 } ?: let {
             // if there's no duration available, clear everything
             binding.timeBar.value = 0f
@@ -423,6 +461,8 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
                 updatePlayPauseButton()
                 isPaused = !isPlaying
             }
+
+            override fun onPlaylistMetadataChanged(mediaMetadata: MediaMetadata) = updateTrackControls()
 
             override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
                 super.onMediaMetadataChanged(mediaMetadata)
