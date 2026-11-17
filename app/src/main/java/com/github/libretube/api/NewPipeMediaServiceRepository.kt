@@ -402,26 +402,24 @@ class NewPipeMediaServiceRepository : MediaServiceRepository {
         )
     }
 
-    override suspend fun getPlaylist(playlistId: String): Playlist {
-        val playlistUrl = "${YOUTUBE_FRONTEND_URL}/playlist?list=${playlistId}"
-        val playlistInfo = PlaylistInfo.getInfo(playlistUrl)
-
-        return playlistInfo.toPlaylist()
+    override suspend fun getPlaylist(playlistId: String): Playlist = withContext(Dispatchers.IO) {
+        val playlistUrl = "${YOUTUBE_FRONTEND_URL}/playlist?list=$playlistId"
+        PlaylistInfo.getInfo(playlistUrl).toPlaylist()
     }
 
-    override suspend fun getPlaylistNextPage(playlistId: String, nextPage: String): Playlist {
-        val playlistUrl = "${YOUTUBE_FRONTEND_URL}/playlist?list=${playlistId}"
-        val playlistInfo = PlaylistInfo.getMoreItems(
-            NewPipeExtractorInstance.extractor,
-            playlistUrl,
-            nextPage.toPage()
-        )
-
-        return Playlist(
-            relatedStreams = playlistInfo.items.map { it.toStreamItem() },
-            nextpage = playlistInfo.nextPage?.toNextPageString()
-        )
-    }
+    override suspend fun getPlaylistNextPage(playlistId: String, nextPage: String): Playlist =
+        withContext(Dispatchers.IO) {
+            val playlistUrl = "${YOUTUBE_FRONTEND_URL}/playlist?list=$playlistId"
+            val playlistInfo = PlaylistInfo.getMoreItems(
+                NewPipeExtractorInstance.extractor,
+                playlistUrl,
+                nextPage.toPage()
+            )
+            Playlist(
+                relatedStreams = playlistInfo.items.map { it.toStreamItem() },
+                nextpage = playlistInfo.nextPage?.toNextPageString()
+            )
+        }
 
     override suspend fun getComments(videoId: String): CommentsPage {
         val url = "${YOUTUBE_FRONTEND_URL}/watch?v=$videoId"
