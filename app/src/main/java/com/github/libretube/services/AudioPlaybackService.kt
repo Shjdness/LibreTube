@@ -328,9 +328,12 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
     private suspend fun resolveAudio(id: String): ResolvedAudio? {
         val start = SystemClock.elapsedRealtime()
         return try {
-            val local = withContext(Dispatchers.IO) { Database.downloadDao().findById(id) }
-            val audio = local?.finishedAudio
-            if (local != null && audio != null) {
+            val completed = withContext(Dispatchers.IO) {
+                val download = Database.downloadDao().findById(id) ?: return@withContext null
+                download.finishedAudio?.let { download to it }
+            }
+            if (completed != null) {
+                val (local, audio) = completed
                 val item = MediaItem.Builder().setMediaId(id).setUri(audio.path.toAndroidUri()).setMetadata(local).build()
                 val source = ProgressiveMediaSource.Factory(FileDataSource.Factory()).createMediaSource(item)
                 return ResolvedAudio(local.download.toStreamItem(), source, local = true)
@@ -419,10 +422,10 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
     }
 
     private fun setPlaylistMetadata(loadingTitle: String? = null) {
-        player.playlistMetadata = MediaMetadata.Builder().setExtras(bundleOf(
-            IntentData.videoId to currentId,
-            IntentData.loadingAudioTitle to loadingTitle
-        )).build()
+        player.playlistMetadata = MediaMetadata.Builder()
+            .setTitle(loadingTitle)
+            .setExtras(bundleOf(IntentData.videoId to currentId))
+            .build()
     }
 
     private fun recordReady() {

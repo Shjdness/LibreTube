@@ -1,6 +1,7 @@
 package com.github.libretube.services
 
 import android.annotation.SuppressLint
+import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent.FLAG_CANCEL_CURRENT
 import android.app.PendingIntent.FLAG_UPDATE_CURRENT
@@ -52,7 +53,9 @@ import com.github.libretube.repo.DownloadProvider
 import com.github.libretube.repo.RawByteStreamDownloadProvider
 import com.github.libretube.repo.SabrDownloadProvider
 import com.github.libretube.ui.activities.MainActivity
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.coroutineScope
@@ -86,14 +89,16 @@ import kotlin.io.path.exists
 class DownloadService : LifecycleService() {
     private val binder = LocalBinder()
     private val dispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-    private val coroutineContext = dispatcher + SupervisorJob()
+    private val workerJob = SupervisorJob().apply { invokeOnCompletion { dispatcher.close() } }
+    private val workerScope = CoroutineScope(dispatcher + workerJob)
 
     private lateinit var notificationManager: NotificationManager
-    private lateinit var summaryNotificationBuilder: Builder
+    private lateinit var summaryNotification: Notification
 
     private val runningIds = mutableSetOf<Int>()
     private val activeIds = ConcurrentHashMap.newKeySet<Int>()
     private val startRequests = AtomicInteger()
+    private val latestStartId = AtomicInteger()
     private val streamLookups = Semaphore(3)
     private val waitingIds = linkedSetOf<Int>()
     private val _downloadFlow = MutableSharedFlow<Pair<Int, DownloadStatus>>()
@@ -107,10 +112,17 @@ class DownloadService : LifecycleService() {
 
     override fun onCreate() {
         super.onCreate()
-        IS_DOWNLOAD_RUNNING = true
-        notifyForeground()
+        notificationManager = getSystemService()!!
+        summaryNotification = Builder(this, DOWNLOAD_CHANNEL_NAME)
+            .setSmallIcon(R.drawable.ic_launcher_lockscreen)
+            .setContentTitle(getString(R.string.downloading))
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setGroup(DOWNLOAD_NOTIFICATION_GROUP)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOnlyAlertOnce(true)
+            .setGroupSummary(true)
+            .build()
         getSystemService<ConnectivityManager>()?.registerDefaultNetworkCallback(networkCallback)
-        sendBroadcast(Intent(ACTION_SERVICE_STARTED).setPackage(packageName))
     }
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
@@ -121,15 +133,45 @@ class DownloadService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        // A bound instance can receive another start after its previous queue went idle.
+        // Acknowledge each start before dispatching database or network work.
+        try {
+            notifyForeground()
+        } catch (e: RuntimeException) {
+            Log.w(TAG(), "Could not start foreground audio downloads", e)
+            stopSelfResult(startId)
+            return START_NOT_STICKY
+        }
+        if (!IS_DOWNLOAD_RUNNING) {
+            IS_DOWNLOAD_RUNNING = true
+            sendBroadcast(Intent(ACTION_SERVICE_STARTED).setPackage(packageName))
+        }
         val downloadId = intent?.getIntExtra("id", -1) ?: -1
         startRequests.incrementAndGet()
-        lifecycleScope.launch(coroutineContext) {
+        latestStartId.set(startId)
+        workerScope.launch {
             try {
                 when (intent?.action) {
                     ACTION_DOWNLOAD_RESUME -> queueDownload(downloadId)
                     ACTION_DOWNLOAD_PAUSE -> pauseDownload(downloadId)
                     ACTION_DOWNLOAD_STOP -> stopDownload(downloadId)
                     ACTION_RESUME_ALL -> resumeAll()
+                    ACTION_ENQUEUE_AUDIO_BATCH -> {
+                        val ids = intent.getStringArrayListExtra(EXTRA_AUDIO_IDS).orEmpty()
+                        coroutineScope {
+                            ids.distinct().forEach { id ->
+                                launch {
+                                    try {
+                                        enqueueAudio(id)
+                                    } catch (e: CancellationException) {
+                                        throw e
+                                    } catch (e: Exception) {
+                                        reportDownloadFailure(e, -1)
+                                    }
+                                }
+                            }
+                        }
+                    }
                     else -> intent?.parcelableExtra<DownloadData>(IntentData.downloadData)?.let { enqueueAudio(it.videoId) }
                 }
             } catch (e: CancellationException) {
@@ -176,7 +218,7 @@ class DownloadService : LifecycleService() {
 
         val streams = try {
             streamLookups.withPermit {
-                withContext(Dispatchers.IO) { MediaServiceRepository.instance.getStreams(videoId) }
+                withContext(Dispatchers.IO) { MediaServiceRepository.instance.getStreams(videoId, includeDislikes = false) }
             }
         } catch (e: CancellationException) {
             throw e
@@ -352,7 +394,7 @@ class DownloadService : LifecycleService() {
             waitingIds.remove(id)
             runningIds.add(id)
             activeIds.add(id)
-            lifecycleScope.launch(coroutineContext) {
+            workerScope.launch {
                 try {
                     val item = Database.downloadDao().findDownloadItemById(id) ?: return@launch
                     if (!item.isFinished && isDownloading(id)) selectFormatAndDownloadFile(item)
@@ -398,10 +440,6 @@ class DownloadService : LifecycleService() {
         queueDownload(item.id)
     }
 
-    fun resume(id: Int) {
-        lifecycleScope.launch(coroutineContext) { queueDownload(id) }
-    }
-
     private fun queueDownload(id: Int) {
         if (id < 0 || isDownloading(id)) return
         waitingIds.add(id)
@@ -409,7 +447,7 @@ class DownloadService : LifecycleService() {
     }
 
     fun pause(id: Int) {
-        lifecycleScope.launch(coroutineContext) {
+        workerScope.launch {
             pauseDownload(id)
             stopServiceIfDone()
         }
@@ -438,10 +476,12 @@ class DownloadService : LifecycleService() {
     }
 
     private fun stopServiceIfDone() {
-        if (startRequests.get() == 0 && waitingIds.isEmpty() && runningIds.isEmpty()) {
-            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
-            sendBroadcast(Intent(ACTION_SERVICE_STOPPED).setPackage(packageName))
-            stopSelf()
+        if (startRequests.get() != 0 || waitingIds.isNotEmpty() || runningIds.isNotEmpty()) return
+        val finishedStartId = latestStartId.get()
+        lifecycleScope.launch(Dispatchers.Main.immediate) {
+            if (startRequests.get() == 0 && latestStartId.get() == finishedStartId &&
+                stopSelfResult(finishedStartId)
+            ) leaveForeground()
         }
     }
 
@@ -462,19 +502,8 @@ class DownloadService : LifecycleService() {
     }
 
     private fun notifyForeground() {
-        notificationManager = getSystemService()!!
-
-        summaryNotificationBuilder = Builder(this, DOWNLOAD_CHANNEL_NAME)
-            .setSmallIcon(R.drawable.ic_launcher_lockscreen)
-            .setContentTitle(getString(R.string.downloading))
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setGroup(DOWNLOAD_NOTIFICATION_GROUP)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOnlyAlertOnce(true)
-            .setGroupSummary(true)
-
         ServiceCompat.startForeground(
-            this, NotificationId.DOWNLOAD_IN_PROGRESS.id, summaryNotificationBuilder.build(),
+            this, NotificationId.DOWNLOAD_IN_PROGRESS.id, summaryNotification,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
             } else {
@@ -584,12 +613,18 @@ class DownloadService : LifecycleService() {
         return DownloadHelper.getDownloadDir(this, directory) / fileName
     }
 
-    override fun onDestroy() {
-        activeIds.clear()
-        getSystemService<ConnectivityManager>()?.unregisterNetworkCallback(networkCallback)
-        dispatcher.close()
+    private fun leaveForeground() {
+        if (!IS_DOWNLOAD_RUNNING) return
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
         IS_DOWNLOAD_RUNNING = false
         sendBroadcast(Intent(ACTION_SERVICE_STOPPED).setPackage(packageName))
+    }
+
+    override fun onDestroy() {
+        leaveForeground()
+        activeIds.clear()
+        getSystemService<ConnectivityManager>()?.unregisterNetworkCallback(networkCallback)
+        workerScope.cancel()
         super.onDestroy()
     }
 
@@ -611,7 +646,11 @@ class DownloadService : LifecycleService() {
         const val ACTION_RESUME_ALL =
             "com.github.libretube.services.DownloadService.ACTION_RESUME_ALL"
 
+        const val ACTION_ENQUEUE_AUDIO_BATCH = "com.github.libretube.services.DownloadService.ENQUEUE_AUDIO_BATCH"
+        const val EXTRA_AUDIO_IDS = "audioIds"
+
         private const val MAX_SEGMENT_RETRIES = 3
-        var IS_DOWNLOAD_RUNNING = false
+        @Volatile var IS_DOWNLOAD_RUNNING = false
+            private set
     }
 }

@@ -599,4 +599,5 @@
     <string name="previous_audio_track">Previous track</string>
     <string name="next_audio_track">Next track</string>
     <string name="loading_audio_track">Loading %1$s</string>
+    <string name="download_start_unavailable">Android could not start the download. Open Libreplayer and try again.</string>
 </resources>

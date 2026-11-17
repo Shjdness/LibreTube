@@ -3,7 +3,7 @@ package com.github.libretube.receivers
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.core.content.ContextCompat
+import com.github.libretube.helpers.DownloadHelper
 import com.github.libretube.services.DownloadService
 
 class NotificationReceiver : BroadcastReceiver() {
@@ -17,7 +17,7 @@ class NotificationReceiver : BroadcastReceiver() {
         if (id == -1) return
         serviceIntent.putExtra("id", id)
 
-        ContextCompat.startForegroundService(context, serviceIntent)
+        DownloadHelper.requestForegroundDownload(context, serviceIntent)
     }
 
     companion object {

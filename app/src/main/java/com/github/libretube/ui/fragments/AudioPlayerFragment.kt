@@ -42,6 +42,7 @@ import com.github.libretube.helpers.BackgroundHelper
 import com.github.libretube.helpers.ClipboardHelper
 import com.github.libretube.helpers.ImageHelper
 import com.github.libretube.helpers.NavigationHelper
+import com.github.libretube.helpers.NetworkHelper
 import com.github.libretube.helpers.PlayerHelper
 import com.github.libretube.helpers.ThemeHelper
 import com.github.libretube.parcelable.PlayerData
@@ -337,45 +338,47 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
             NavigationHelper.navigateChannel(requireContext(), uploaderId)
         }
 
-        metadata.artworkUri?.let { updateThumbnailAsync(it) }
+        showArtworkPlaceholder()
+        val localAudio = metadata.extras?.getBoolean(IntentData.localAudio) == true
+        metadata.artworkUri?.let { updateThumbnailAsync(it, localAudio) }
         val id = metadata.extras?.getString(IntentData.videoId)
-        if (id != null && metadata.artworkUri?.scheme?.startsWith("http") == true) {
+        if (id != null && !localAudio && metadata.artworkUri?.scheme?.startsWith("http") == true &&
+            NetworkHelper.isNetworkAvailable(requireContext()) && !DataSaverMode.isEnabled(requireContext())
+        ) {
             brandingJob = viewLifecycleOwner.lifecycleScope.launch {
                 val (title, thumbnail) = DeArrowUtil.deArrowVideoId(id) ?: return@launch
                 if (playerController?.mediaMetadata?.extras?.getString(IntentData.videoId) != id) return@launch
                 brandedTitle = title
                 updateTrackControls()
-                thumbnail?.let { updateThumbnailAsync(Uri.parse(it)) }
+                thumbnail?.let { updateThumbnailAsync(Uri.parse(it), localAudio = false) }
             }
         }
         initializeSeekBar()
     }
 
-    private fun updateThumbnailAsync(thumbnailUri: Uri) {
-        artworkJob?.cancel()
-        if (DataSaverMode.isEnabled(requireContext()) && thumbnailUri.scheme?.startsWith("http") == true) {
-            binding.progress.isVisible = false
-            binding.thumbnail.setImageResource(R.drawable.ic_launcher_monochrome)
-            val primaryColor = ThemeHelper.getThemeColor(
-                requireContext(),
-                androidx.appcompat.R.attr.colorPrimary
-            )
-            binding.thumbnail.setColorFilter(primaryColor)
-            return
-        }
+    private fun showArtworkPlaceholder() {
+        val binding = _binding ?: return
+        binding.thumbnail.setImageResource(R.drawable.ic_launcher_monochrome)
+        binding.thumbnail.setColorFilter(ThemeHelper.getThemeColor(
+            requireContext(), androidx.appcompat.R.attr.colorPrimary
+        ))
+        binding.thumbnail.isVisible = true
+        binding.miniPlayerThumbnail.setImageResource(R.drawable.ic_launcher_monochrome)
+    }
 
-        binding.progress.isVisible = true
-        binding.thumbnail.isGone = true
-        // reset color filter if data saver mode got toggled or conditions for it changed
-        binding.thumbnail.setColorFilter(Color.TRANSPARENT)
+    private fun updateThumbnailAsync(thumbnailUri: Uri, localAudio: Boolean) {
+        artworkJob?.cancel()
+        val remote = thumbnailUri.scheme == "http" || thumbnailUri.scheme == "https"
+        if (remote && (localAudio || DataSaverMode.isEnabled(requireContext()) ||
+                !NetworkHelper.isNetworkAvailable(requireContext()))
+        ) return
 
         artworkJob = viewLifecycleOwner.lifecycleScope.launch {
-            val binding = _binding ?: return@launch
-            val bitmap = ImageHelper.getImage(requireContext(), thumbnailUri)
-            binding.thumbnail.setImageBitmap(bitmap)
-            binding.miniPlayerThumbnail.setImageBitmap(bitmap)
-            binding.thumbnail.isVisible = true
-            binding.progress.isGone = true
+            val bitmap = ImageHelper.getImage(requireContext(), thumbnailUri) ?: return@launch
+            val views = _binding ?: return@launch
+            views.thumbnail.setColorFilter(Color.TRANSPARENT)
+            views.thumbnail.setImageBitmap(bitmap)
+            views.miniPlayerThumbnail.setImageBitmap(bitmap)
         }
     }
 
@@ -403,9 +406,14 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         val id = controller.mediaMetadata.extras?.getString(IntentData.videoId)
         binding.prev.isEnabled = PlayingQueue.adjacentIds(id, reverse = true).isNotEmpty()
         binding.next.isEnabled = PlayingQueue.adjacentIds(id).isNotEmpty()
-        val loading = controller.playlistMetadata.extras?.getString(IntentData.loadingAudioTitle)
-        val title = loading?.let { getString(R.string.loading_audio_track, it) }
-            ?: brandedTitle ?: controller.mediaMetadata.title
+        val loading = !controller.isPlaying &&
+            (controller.playlistMetadata.title != null ||
+                (controller.playWhenReady && controller.playbackState == Player.STATE_BUFFERING))
+        val trackTitle = brandedTitle ?: controller.mediaMetadata.title
+        val pendingTitle = controller.playlistMetadata.title ?: trackTitle
+        val title = if (loading && pendingTitle != null) getString(R.string.loading_audio_track, pendingTitle)
+            else trackTitle
+        binding.progress.isVisible = loading
         if (binding.title.text != title) binding.title.text = title
         if (binding.miniPlayerTitle.text != title) binding.miniPlayerTitle.text = title
     }
@@ -459,8 +467,11 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
                 super.onIsPlayingChanged(isPlaying)
 
                 updatePlayPauseButton()
+                updateTrackControls()
                 isPaused = !isPlaying
             }
+
+            override fun onPlaybackStateChanged(playbackState: Int) = updateTrackControls()
 
             override fun onPlaylistMetadataChanged(mediaMetadata: MediaMetadata) = updateTrackControls()
 

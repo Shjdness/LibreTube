@@ -36,6 +36,7 @@ import com.github.libretube.helpers.PreferenceHelper
 import com.github.libretube.obj.DownloadStatus
 import com.github.libretube.obj.bottomsheetitem.BottomSheetItem
 import com.github.libretube.obj.bottomsheetitem.BottomSheetItemTitle
+import com.github.libretube.receivers.NotificationReceiver.Companion.ACTION_DOWNLOAD_RESUME
 import com.github.libretube.services.DownloadService
 import com.github.libretube.ui.adapters.DownloadsAdapter
 import com.github.libretube.ui.base.DynamicLayoutManagerFragment
@@ -193,7 +194,7 @@ class DownloadsFragment : DynamicLayoutManagerFragment(R.layout.fragment_downloa
             }.show(childFragmentManager)
         }
         binding.resumeAll.setOnClickListener {
-            ContextCompat.startForegroundService(requireContext(),
+            DownloadHelper.requestForegroundDownload(requireContext(),
                 Intent(requireContext(), DownloadService::class.java).setAction(DownloadService.ACTION_RESUME_ALL))
         }
         binding.deleteAll.setOnClickListener { showDeleteAllDialog() }
@@ -267,7 +268,10 @@ class DownloadsFragment : DynamicLayoutManagerFragment(R.layout.fragment_downloa
             connected.pause(item.id)
             false
         } else {
-            connected.resume(item.id)
+            DownloadHelper.requestForegroundDownload(requireContext(),
+                Intent(requireContext(), DownloadService::class.java)
+                    .setAction(ACTION_DOWNLOAD_RESUME)
+                    .putExtra("id", item.id))
             true
         }
     }

@@ -2,6 +2,9 @@ package com.github.libretube.helpers
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
+import android.widget.Toast
+import com.github.libretube.R
 import androidx.core.content.ContextCompat
 import com.github.libretube.constants.IntentData
 import com.github.libretube.db.DatabaseHolder
@@ -39,7 +42,7 @@ object DownloadHelper {
         val intent = Intent(context, DownloadService::class.java)
             .putExtra(IntentData.downloadData, downloadData)
 
-        ContextCompat.startForegroundService(context, intent)
+        requestForegroundDownload(context, intent)
     }
 
     fun DownloadItem.getNotificationId(): Int {
@@ -50,12 +53,32 @@ object DownloadHelper {
         startDownloadService(context, DownloadData(videoId))
     }
 
+    fun downloadAudioBatch(context: Context, ids: List<String>) {
+        val videoIds = ids.distinct()
+        if (videoIds.isEmpty()) return
+        val intent = Intent(context, DownloadService::class.java)
+            .setAction(DownloadService.ACTION_ENQUEUE_AUDIO_BATCH)
+            .putStringArrayListExtra(DownloadService.EXTRA_AUDIO_IDS, ArrayList(videoIds))
+        requestForegroundDownload(context, intent)
+    }
+
+    fun requestForegroundDownload(context: Context, intent: Intent) {
+        try {
+            ContextCompat.startForegroundService(context, intent)
+        } catch (e: IllegalStateException) {
+            Log.w("DownloadHelper", "Android did not allow the download service to start", e)
+            ContextCompat.getMainExecutor(context).execute {
+                Toast.makeText(context, R.string.download_start_unavailable, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     fun downloadPlaylistAudio(context: Context, playlistId: String, playlistName: String, playlistType: PlaylistType) {
         val intent = Intent(context, PlaylistDownloadEnqueueService::class.java)
             .putExtra(IntentData.playlistId, playlistId)
             .putExtra(IntentData.playlistName, playlistName)
             .putExtra(IntentData.playlistType, playlistType)
-        ContextCompat.startForegroundService(context, intent)
+        requestForegroundDownload(context, intent)
     }
 
     suspend fun getDownloadedAudioQueue(videoIds: List<String>): List<DownloadWithItems> =

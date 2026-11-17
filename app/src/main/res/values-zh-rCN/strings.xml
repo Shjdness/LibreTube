@@ -581,4 +581,5 @@
     <string name="previous_audio_track">上一首</string>
     <string name="next_audio_track">下一首</string>
     <string name="loading_audio_track">正在加载 %1$s</string>
+    <string name="download_start_unavailable">Android 未能启动下载，请回到 Libreplayer 再试。</string>
 </resources>

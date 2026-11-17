@@ -144,14 +144,11 @@ class PlaylistDownloadEnqueueService : LifecycleService() {
     private fun enqueueStreams(streams: List<StreamItem>) {
         nManager.notify(NotificationId.ENQUEUE_PLAYLIST_DOWNLOAD.id, buildNotification())
 
-        for (stream in streams) {
-            val videoId = stream.url?.toID() ?: continue
-
-            DownloadHelper.downloadAudio(this, videoId)
-
-            amountOfVideosDone++
-            nManager.notify(NotificationId.ENQUEUE_PLAYLIST_DOWNLOAD.id, buildNotification())
-        }
+        val ids = streams.mapNotNull { it.url?.toID() }
+        if (ids.isEmpty()) return
+        DownloadHelper.downloadAudioBatch(this, ids)
+        amountOfVideosDone += ids.size
+        nManager.notify(NotificationId.ENQUEUE_PLAYLIST_DOWNLOAD.id, buildNotification())
     }
 
     override fun onDestroy() {

@@ -49,6 +49,7 @@ fun MediaItem.Builder.setMetadata(downloadWithItems: DownloadWithItems) = apply 
         MediaMetadataCompat.METADATA_KEY_TITLE to download.title,
         MediaMetadataCompat.METADATA_KEY_ARTIST to download.uploader,
         IntentData.videoId to download.videoId,
+        IntentData.localAudio to true,
         IntentData.streams to JsonHelper.json.encodeToString(streams),
         IntentData.chapters to JsonHelper.json.encodeToString(chapters)
     )
