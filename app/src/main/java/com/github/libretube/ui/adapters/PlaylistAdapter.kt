@@ -70,7 +70,7 @@ class PlaylistAdapter(
             videoTitle.text = streamItem.title
             val publicationDate = streamItem.publicationDate() ?: publicationDates[videoId]
             trackMetadata.text = listOfNotNull(
-                streamItem.uploaderName?.takeIf { it.isNotBlank() },
+                streamItem.playlistAuthorName(),
                 publicationDate,
                 streamItem.duration?.takeIf { it > 0 }?.let(DateUtils::formatElapsedTime)
             ).joinToString(" · ")

@@ -34,6 +34,9 @@ data class StreamItem(
     val isLive get() = !isShort && ((duration == null) || (duration <= 0L))
     val isUpcoming get() = uploaded > System.currentTimeMillis()
 
+    fun playlistAuthorName(): String? =
+        uploaderName?.trim()?.takeIf { it.isNotEmpty() && !PLAYLIST_VIEW_COUNT.matches(it) }
+
     fun publicationDate(): String? =
         uploadedDate?.substringBefore('T')?.let { runCatching { LocalDate.parse(it).toString() }.getOrNull() }
 
@@ -88,6 +91,10 @@ data class StreamItem(
     )
 
     companion object {
+        private val PLAYLIST_VIEW_COUNT = Regex(
+            """[\d.,\s]+\s*(?:[kmb]|万|亿)?\s*(?:views?|次观看|回視聴)""",
+            RegexOption.IGNORE_CASE
+        )
         const val TYPE_STREAM = "stream"
         const val TYPE_CHANNEL = "channel"
         const val TYPE_PLAYLIST = "playlist"

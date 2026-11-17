@@ -425,10 +425,10 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
 
     private fun authorKey(item: StreamItem): String =
         item.uploaderUrl?.takeIf { it.isNotBlank() }?.toID()?.let { "id:$it" }
-            ?: "name:" + item.uploaderName.orEmpty().trim().lowercase()
+            ?: "name:" + item.playlistAuthorName().orEmpty().trim().lowercase()
 
     private fun authorName(item: StreamItem): String =
-        item.uploaderName?.takeIf { it.isNotBlank() } ?: getString(R.string.unknown_playlist_author)
+        item.playlistAuthorName() ?: getString(R.string.unknown_playlist_author)
 
     private fun chooseAuthor() {
         val authors = playlistFeed.distinctBy(::authorKey)
@@ -456,7 +456,7 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
         val filtered = playlistFeed.mapIndexed(::indexedItem).filter { (item, _) ->
             (selectedAuthor == null || authorKey(item) == selectedAuthor) &&
                 (item.title.orEmpty().contains(query, ignoreCase = true) ||
-                    item.uploaderName.orEmpty().contains(query, ignoreCase = true))
+                    item.playlistAuthorName().orEmpty().contains(query, ignoreCase = true))
         }
         return when (selectedSortOrder) {
             1 -> filtered.reversed()
@@ -464,8 +464,8 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
             3 -> filtered.sortedByDescending { it.item.duration }
             4 -> filtered.sortedBy { it.item.title?.lowercase() }
             5 -> filtered.sortedByDescending { it.item.title?.lowercase() }
-            6 -> filtered.sortedBy { it.item.uploaderName.orEmpty().lowercase() }
-            7 -> filtered.sortedByDescending { it.item.uploaderName.orEmpty().lowercase() }
+            6 -> filtered.sortedBy { it.item.playlistAuthorName().orEmpty().lowercase() }
+            7 -> filtered.sortedByDescending { it.item.playlistAuthorName().orEmpty().lowercase() }
             else -> filtered
         }
     }
