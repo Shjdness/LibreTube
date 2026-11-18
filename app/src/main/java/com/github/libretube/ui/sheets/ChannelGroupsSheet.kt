@@ -13,9 +13,9 @@ import com.github.libretube.extensions.move
 import com.github.libretube.extensions.setOnDraggedListener
 import com.github.libretube.ui.adapters.SubscriptionGroupsAdapter
 import com.github.libretube.ui.models.SubscriptionsViewModel
-import com.github.libretube.ui.sheets.AddChannelToGroupSheet.Companion.applyGroupsDiff
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import com.github.libretube.repo.UserDataRepositoryHelper
+import com.github.libretube.extensions.toastFromMainDispatcher
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
 
 class ChannelGroupsSheet : ExpandedBottomSheet(R.layout.dialog_subscription_groups) {
@@ -28,7 +28,7 @@ class ChannelGroupsSheet : ExpandedBottomSheet(R.layout.dialog_subscription_grou
         val binding = DialogSubscriptionGroupsBinding.bind(view)
         binding.groupsRV.layoutManager = LinearLayoutManager(context)
         val groups = viewModel.groups.value.orEmpty().toMutableList()
-        val adapter = SubscriptionGroupsAdapter(groups, viewModel, parentFragmentManager)
+        val adapter = SubscriptionGroupsAdapter(groups, viewModel, parentFragmentManager, viewLifecycleOwner.lifecycleScope)
         binding.groupsRV.adapter = adapter
 
         binding.newGroup.setOnClickListener {
@@ -42,14 +42,21 @@ class ChannelGroupsSheet : ExpandedBottomSheet(R.layout.dialog_subscription_grou
         }
 
         binding.confirm.setOnClickListener {
-            val groupsBeforeChange = viewModel.groups.value.orEmpty()
-
-            viewModel.groups.value = adapter.groups
-            viewModel.groups.value?.forEachIndexed { index, group -> group.index = index }
-            CoroutineScope(Dispatchers.IO).launch {
-                applyGroupsDiff(groupsBeforeChange, adapter.groups)
+            val orderedNames = adapter.groups.map { it.name }
+            binding.confirm.isEnabled = false
+            viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    val repository = UserDataRepositoryHelper.userDataRepository
+                    repository.reorderSubscriptionGroups(orderedNames)
+                    viewModel.groups.value = repository.getSubscriptionGroups()
+                    dismiss()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    context?.toastFromMainDispatcher(e.message.orEmpty())
+                    binding.confirm.isEnabled = true
+                }
             }
-            dismiss()
         }
 
         binding.groupsRV.setOnDraggedListener { from, to ->

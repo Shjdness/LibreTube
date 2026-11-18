@@ -5,7 +5,6 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.ListAdapter
 import com.github.libretube.api.obj.Subscription
 import com.github.libretube.databinding.SubscriptionGroupChannelRowBinding
-import com.github.libretube.db.obj.SubscriptionGroup
 import com.github.libretube.extensions.toID
 import com.github.libretube.helpers.ImageHelper
 import com.github.libretube.helpers.NavigationHelper
@@ -13,7 +12,7 @@ import com.github.libretube.ui.adapters.callbacks.DiffUtilItemCallback
 import com.github.libretube.ui.viewholders.SubscriptionGroupChannelRowViewHolder
 
 class SubscriptionGroupChannelsAdapter(
-    private val group: SubscriptionGroup,
+    private val selectedIds: MutableSet<String>,
     private val onChannelsChanged: (List<String>) -> Unit
 ) : ListAdapter<Subscription, SubscriptionGroupChannelRowViewHolder>(DiffUtilItemCallback()) {
 
@@ -27,7 +26,7 @@ class SubscriptionGroupChannelsAdapter(
     }
 
     override fun onBindViewHolder(holder: SubscriptionGroupChannelRowViewHolder, position: Int) {
-        val channel = getItem(holder.bindingAdapterPosition)
+        val channel = getItem(position)
         holder.binding.apply {
             root.setOnClickListener {
                 NavigationHelper.navigateChannel(root.context, channel.url)
@@ -37,10 +36,10 @@ class SubscriptionGroupChannelsAdapter(
 
             val channelId = channel.url.toID()
             channelIncluded.setOnCheckedChangeListener(null)
-            channelIncluded.isChecked = group.channels.contains(channelId)
+            channelIncluded.isChecked = channelId in selectedIds
             channelIncluded.setOnCheckedChangeListener { _, isChecked ->
-                if (isChecked) group.channels += channelId else group.channels -= channelId
-                onChannelsChanged(group.channels)
+                if (isChecked) selectedIds.add(channelId) else selectedIds.remove(channelId)
+                onChannelsChanged(selectedIds.toList())
             }
         }
     }

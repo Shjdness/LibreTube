@@ -9,7 +9,7 @@ import com.github.libretube.ui.adapters.callbacks.DiffUtilItemCallback
 import com.github.libretube.ui.viewholders.AddChannelToGroupViewHolder
 
 class AddChannelToGroupAdapter(
-    private val channelId: String
+    private val selectedNames: MutableSet<String>
 ) : ListAdapter<SubscriptionGroup, AddChannelToGroupViewHolder>(DiffUtilItemCallback()) {
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AddChannelToGroupViewHolder {
         val layoutInflater = LayoutInflater.from(parent.context)
@@ -18,17 +18,18 @@ class AddChannelToGroupAdapter(
     }
 
     override fun onBindViewHolder(holder: AddChannelToGroupViewHolder, position: Int) {
-        val channelGroup = getItem(holder.bindingAdapterPosition)
+        val channelGroup = getItem(position)
 
         holder.binding.apply {
             groupName.text = channelGroup.name
-            groupCheckbox.isChecked = channelGroup.channels.contains(channelId)
+            groupCheckbox.setOnCheckedChangeListener(null)
+            groupCheckbox.isChecked = channelGroup.name in selectedNames
 
             groupCheckbox.setOnCheckedChangeListener { _, isChecked ->
                 if (isChecked) {
-                    channelGroup.channels += channelId
+                    selectedNames.add(channelGroup.name)
                 } else {
-                    channelGroup.channels -= channelId
+                    selectedNames.remove(channelGroup.name)
                 }
             }
             root.setOnClickListener {

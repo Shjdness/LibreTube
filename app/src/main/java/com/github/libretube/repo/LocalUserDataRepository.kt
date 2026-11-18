@@ -1,6 +1,7 @@
 package com.github.libretube.repo
 
 import androidx.room.withTransaction
+import com.github.libretube.extensions.toID
 import com.github.libretube.api.obj.Playlist
 import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.helpers.PreferenceHelper
@@ -196,28 +197,36 @@ class LocalUserDataRepository : UserDataRepository {
         })
     }
 
-    override suspend fun createSubscriptionGroup(name: String): String {
-        Database.subscriptionGroupsDao()
-            .createGroup(SubscriptionGroup(name = name))
-
-        // name is the ID in our database modeling
-        return name
+    override suspend fun saveSubscriptionGroup(
+        originalName: String?, name: String, channelIds: List<String>
+    ): Boolean = Database.withTransaction {
+        val dao = Database.subscriptionGroupsDao()
+        val original = originalName?.let {
+            checkNotNull(dao.getByName(it)) { "Subscription group no longer exists" }
+        }
+        if (name != originalName && dao.exists(name)) return@withTransaction false
+        val index = original?.index ?: ((dao.getAll().maxOfOrNull { it.index } ?: -1) + 1)
+        val updated = SubscriptionGroup(name, channelIds.map(String::toID).distinct(), index)
+        if (name == originalName) dao.updateGroup(updated)
+        else {
+            dao.createGroup(updated)
+            if (originalName != null) {
+                dao.deleteGroup(originalName)
+                if (PreferenceHelper.getString(PreferenceKeys.SELECTED_CHANNEL_GROUP_KEY, "") == "group:" + originalName) {
+                    PreferenceHelper.putString(PreferenceKeys.SELECTED_CHANNEL_GROUP_KEY, "group:" + name)
+                }
+            }
+        }
+        true
     }
 
-    override suspend fun renameSubscriptionGroup(
-        subscriptionGroupId: String,
-        newName: String
-    ) {
-        val updatedGroup = Database.subscriptionGroupsDao()
-            .getByName(subscriptionGroupId)!!.copy(name = newName)
-
-        // delete the old version of the group first before updating it, as the name is the
-        // primary key
-        Database.subscriptionGroupsDao().deleteGroup(subscriptionGroupId)
-        if (PreferenceHelper.getString(PreferenceKeys.SELECTED_CHANNEL_GROUP_KEY, "") == "group:" + subscriptionGroupId) {
-            PreferenceHelper.putString(PreferenceKeys.SELECTED_CHANNEL_GROUP_KEY, "group:" + newName)
-        }
-        Database.subscriptionGroupsDao().createGroup(updatedGroup)
+    override suspend fun reorderSubscriptionGroups(names: List<String>) = Database.withTransaction {
+        val dao = Database.subscriptionGroupsDao()
+        val groups = dao.getAll().associateBy { it.name }
+        (names.distinct().mapNotNull(groups::get) + groups.values.filter { it.name !in names })
+            .forEachIndexed { index, group ->
+                if (group.index != index) dao.updateGroup(group.copy(index = index))
+            }
     }
 
     override suspend fun deleteSubscriptionGroup(subscriptionGroupId: String) {
@@ -234,22 +243,16 @@ class LocalUserDataRepository : UserDataRepository {
             .sortedBy { it.index }
     }
 
-    override suspend fun addToSubscriptionGroup(
-        subscriptionGroupId: String,
-        channelId: String
-    ) {
-        val group = Database.subscriptionGroupsDao().getByName(subscriptionGroupId)!!
-        group.channels = group.channels.plus(channelId).distinct()
-        Database.subscriptionGroupsDao().updateGroup(group)
-    }
-
-    override suspend fun removeFromSubscriptionGroup(
-        subscriptionGroupId: String,
-        channelId: String
-    ) {
-        val group = Database.subscriptionGroupsDao().getByName(subscriptionGroupId)!!
-        group.channels = group.channels.filter { it != channelId }
-        Database.subscriptionGroupsDao().updateGroup(group)
+    override suspend fun updateChannelGroups(
+        channelId: String, editedNames: Set<String>, selectedNames: Set<String>
+    ) = Database.withTransaction {
+        val dao = Database.subscriptionGroupsDao()
+        val id = channelId.toID()
+        for (group in dao.getAll().filter { it.name in editedNames }) {
+            val members = group.channels.map(String::toID).toMutableSet()
+            val changed = if (group.name in selectedNames) members.add(id) else members.remove(id)
+            if (changed) dao.updateGroup(group.copy(channels = members.toList()))
+        }
     }
 
     override suspend fun addToWatchHistory(watchHistoryEntry: WatchHistoryEntry) {

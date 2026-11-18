@@ -62,7 +62,7 @@ class SubscriptionsFragment : Fragment(R.layout.fragment_subscriptions) {
                     showChannels(restoreScroll = true)
                 } else {
                     if (!availableGroup(selectedGroup)) {
-                        selectedGroup = GROUP_ALL
+                        selectedGroup = readSelection()
                         rememberSelection()
                     }
                     rebuildChips()

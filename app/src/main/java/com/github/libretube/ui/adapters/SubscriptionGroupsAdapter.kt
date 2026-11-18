@@ -14,13 +14,15 @@ import com.github.libretube.ui.sheets.EditChannelGroupSheet
 import com.github.libretube.ui.viewholders.SubscriptionGroupsViewHolder
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import com.github.libretube.extensions.toastFromMainDispatcher
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
 
 class SubscriptionGroupsAdapter(
     var groups: MutableList<SubscriptionGroup>,
     private val viewModel: SubscriptionsViewModel,
-    private val parentFragmentManager: FragmentManager
+    private val parentFragmentManager: FragmentManager,
+    private val scope: CoroutineScope
 ) : RecyclerView.Adapter<SubscriptionGroupsViewHolder>() {
     override fun onCreateViewHolder(
         parent: ViewGroup,
@@ -39,7 +41,7 @@ class SubscriptionGroupsAdapter(
             groupName.text = subscriptionGroup.name
 
             deleteGroup.setOnClickListener {
-                showDeleteDialog(root.context, position)
+                showDeleteDialog(root.context, subscriptionGroup.name)
             }
 
             editGroup.setOnClickListener {
@@ -49,17 +51,21 @@ class SubscriptionGroupsAdapter(
         }
     }
 
-    private fun showDeleteDialog(context: Context, position: Int) {
+    private fun showDeleteDialog(context: Context, groupName: String) {
         MaterialAlertDialogBuilder(context)
             .setTitle(R.string.delete)
             .setMessage(R.string.irreversible)
             .setPositiveButton(R.string.okay) { _, _ ->
-                CoroutineScope(Dispatchers.IO).launch {
-                    UserDataRepositoryHelper.userDataRepository
-                        .deleteSubscriptionGroup(groups[position].id)
-
-                    groups.removeAt(position)
-                    viewModel.groups.postValue(groups)
+                scope.launch {
+                    try {
+                        val repository = UserDataRepositoryHelper.userDataRepository
+                        repository.deleteSubscriptionGroup(groupName)
+                        viewModel.groups.value = repository.getSubscriptionGroups()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        context.toastFromMainDispatcher(e.message.orEmpty())
+                    }
                 }
             }
             .setNegativeButton(R.string.cancel, null)

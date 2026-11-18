@@ -41,13 +41,12 @@ interface UserDataRepository {
     suspend fun createPlaylist(playlistName: String): String?
     suspend fun deletePlaylist(playlistId: String): Boolean
 
-    suspend fun createSubscriptionGroup(name: String): String
-    suspend fun renameSubscriptionGroup(subscriptionGroupId: String, newName: String)
+    suspend fun saveSubscriptionGroup(originalName: String?, name: String, channelIds: List<String>): Boolean
+    suspend fun reorderSubscriptionGroups(names: List<String>)
     suspend fun deleteSubscriptionGroup(subscriptionGroupId: String)
     suspend fun getSubscriptionGroup(subscriptionGroupId: String): SubscriptionGroup
     suspend fun getSubscriptionGroups(): List<SubscriptionGroup>
-    suspend fun addToSubscriptionGroup(subscriptionGroupId: String, channelId: String)
-    suspend fun removeFromSubscriptionGroup(subscriptionGroupId: String, channelId: String)
+    suspend fun updateChannelGroups(channelId: String, editedNames: Set<String>, selectedNames: Set<String>)
 
     suspend fun addToWatchHistory(watchHistoryEntry: WatchHistoryEntry)
     suspend fun updateWatchHistoryEntry(metadata: WatchHistoryEntryMetadata)
