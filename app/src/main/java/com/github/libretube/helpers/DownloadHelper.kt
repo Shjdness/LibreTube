@@ -83,7 +83,8 @@ object DownloadHelper {
 
     suspend fun getDownloadedAudioQueue(videoIds: List<String>): List<DownloadWithItems> =
         withContext(Dispatchers.IO) {
-            val downloads = DatabaseHolder.Database.downloadDao().getAll()
+            val dao = DatabaseHolder.Database.downloadDao()
+            val downloads = videoIds.distinct().chunked(500).flatMap { dao.getByIds(it) }
                 .filter { it.finishedAudio != null }
                 .associateBy { it.download.videoId }
             videoIds.mapNotNull(downloads::get)

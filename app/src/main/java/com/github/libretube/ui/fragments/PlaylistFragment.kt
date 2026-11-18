@@ -11,7 +11,6 @@ import androidx.core.os.bundleOf
 import androidx.core.text.parseAsHtml
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
-import androidx.core.view.updatePadding
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.Lifecycle
@@ -39,24 +38,19 @@ import com.github.libretube.databinding.FragmentPlaylistBinding
 import com.github.libretube.enums.PlaylistType
 import com.github.libretube.enums.menuoption.PlayListSortModeBottomSheetItem
 import com.github.libretube.extensions.TAG
-import com.github.libretube.extensions.dpToPx
 import com.github.libretube.extensions.setOnDismissListener
 import com.github.libretube.extensions.toID
 import com.github.libretube.extensions.toastFromMainDispatcher
-import com.github.libretube.helpers.DownloadHelper
 import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.helpers.PreferenceHelper
-import com.github.libretube.parcelable.PlayerData
 import com.github.libretube.ui.adapters.PlaylistAdapter
 import com.github.libretube.ui.adapters.PlaylistItem
 import com.github.libretube.ui.base.BaseActivity
 import com.github.libretube.ui.base.DynamicLayoutManagerFragment
 import com.github.libretube.ui.extensions.addOnBottomReachedListener
-import com.github.libretube.ui.models.CommonPlayerViewModel
 import com.github.libretube.ui.models.PlaylistViewModel
 import com.github.libretube.ui.sheets.BaseBottomSheet
 import com.github.libretube.ui.sheets.PlaylistOptionsBottomSheet
-import com.github.libretube.util.PlayingQueue
 import com.github.libretube.util.TextUtils
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Dispatchers
@@ -90,7 +84,6 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
     private var isBookmarked = false
 
     // view models
-    private val commonPlayerViewModel: CommonPlayerViewModel by activityViewModels()
     private val playlistViewModel: PlaylistViewModel by activityViewModels()
     private var selectedSortOrder = PreferenceHelper.getInt(PreferenceKeys.PLAYLIST_SORT_ORDER, 0)
         set(value) {
@@ -155,9 +148,6 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
                 dateSourceUnavailable = false
                 refreshPublicPlaylist()
             }
-        }
-        commonPlayerViewModel.isMiniPlayerVisible.observe(viewLifecycleOwner) {
-            binding.playlistRecView.updatePadding(bottom = if (it) 64f.dpToPx() else 0)
         }
         playlistViewModel.searchQuery.observe(viewLifecycleOwner) { showPlaylistVideos() }
         viewLifecycleOwner.lifecycleScope.launch {
@@ -381,11 +371,20 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
             IntentData.playlistName to playlistName.orEmpty(),
             IntentData.playlistType to playlistType,
             IntentData.playlistThumbnail to playlist.thumbnailUrl,
+            PlaylistOptionsBottomSheet.USE_VISIBLE_PLAYLIST to true,
         )
         val manager = (requireActivity() as BaseActivity).supportFragmentManager
         manager.setFragmentResultListener(
             PlaylistOptionsBottomSheet.PLAYLIST_OPTIONS_REQUEST_KEY, viewLifecycleOwner
         ) { _, result ->
+            if (result.containsKey(PlaylistOptionsBottomSheet.APPEND_VISIBLE_PLAYLIST)) {
+                val append = result.getBoolean(PlaylistOptionsBottomSheet.APPEND_VISIBLE_PLAYLIST)
+                val tracks = visibleTracks().map { it.item }
+                viewLifecycleOwner.lifecycleScope.launch {
+                    NavigationHelper.playPlaylistAudio(requireContext(), tracks, playlistId, playlistName, append = append)
+                }
+                return@setFragmentResultListener
+            }
             result.getString(IntentData.playlistDescription)?.let {
                 playlist.description = it
                 binding.playlistDescription.text = it
@@ -401,25 +400,8 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
     }
 
     private fun startPlayback(items: List<StreamItem>, clicked: StreamItem? = null) {
-        if (items.isEmpty()) return
-        val context = requireContext()
         viewLifecycleOwner.lifecycleScope.launch {
-            val offline = !NetworkHelper.isNetworkAvailable(context)
-            val eligible = if (offline) {
-                val ids = items.mapNotNull { it.url?.toID() }
-                val ready = DownloadHelper.getDownloadedAudioQueue(ids).mapTo(mutableSetOf()) { it.download.videoId }
-                items.filter { it.url?.toID() in ready }
-            } else items
-            val first = (clicked ?: eligible.firstOrNull())?.takeIf { it in eligible }
-            val id = first?.url?.toID()
-            if (id == null) {
-                context.toastFromMainDispatcher(R.string.audio_not_downloaded)
-                return@launch
-            }
-            PlayingQueue.setStreams(eligible)
-            NavigationHelper.navigateVideo(context, PlayerData(
-                id, playlistId = playlistId, keepQueue = true, queueName = playlistName, isOffline = offline
-            ))
+            NavigationHelper.playPlaylistAudio(requireContext(), items, playlistId, playlistName, clicked)
         }
     }
 

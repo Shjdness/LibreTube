@@ -48,7 +48,6 @@ class ChannelGroupsSheet : ExpandedBottomSheet(R.layout.dialog_subscription_grou
                 try {
                     val repository = UserDataRepositoryHelper.userDataRepository
                     repository.reorderSubscriptionGroups(orderedNames)
-                    viewModel.groups.value = repository.getSubscriptionGroups()
                     dismiss()
                 } catch (e: CancellationException) {
                     throw e

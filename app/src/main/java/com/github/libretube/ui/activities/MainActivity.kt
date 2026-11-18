@@ -609,6 +609,13 @@ class MainActivity : AbstractPlayerHostActivity() {
         binding.mainMotionLayout.transitionToStart()
     }
 
+    override fun setMiniPlayerSpace(height: Int) {
+        val host = binding.fragment
+        if (host.paddingBottom != height) {
+            host.setPadding(host.paddingLeft, host.paddingTop, host.paddingRight, height)
+        }
+    }
+
     override fun setPlayerContainerProgress(progress: Float) {
         if (!NavBarHelper.hasTabs()) return
 

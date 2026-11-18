@@ -76,7 +76,6 @@ class EditChannelGroupSheet : ExpandedBottomSheet(R.layout.dialog_edit_channel_g
                 try {
                     val repository = UserDataRepositoryHelper.userDataRepository
                     if (repository.saveSubscriptionGroup(oldGroupName.takeIf { it.isNotBlank() }, name, selected)) {
-                        viewModel.groups.value = repository.getSubscriptionGroups()
                         dismiss()
                     } else {
                         binding.groupName.error = getString(R.string.group_name_error_exists)

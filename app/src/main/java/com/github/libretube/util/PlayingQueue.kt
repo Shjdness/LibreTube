@@ -11,6 +11,9 @@ import com.github.libretube.extensions.toID
 import com.github.libretube.helpers.PlayerHelper
 import com.github.libretube.obj.ChannelIdentifier
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import java.util.Collections
 
 object PlayingQueue {
@@ -19,12 +22,17 @@ object PlayingQueue {
     private var currentStream: StreamItem? = null
 
     private val queueJobs = mutableListOf<Job>()
+    private val changes = MutableStateFlow(0L)
+    val revision = changes.asStateFlow()
+
+    private fun notifyChanged() = changes.update { it + 1 }
 
     // wrapper around PlayerHelper#repeatMode for compatibility
     var repeatMode: Int
         get() = PlayerHelper.repeatMode
         set(value) {
             PlayerHelper.repeatMode = value
+            notifyChanged()
         }
 
     private fun clearJobs() {
@@ -38,6 +46,7 @@ object PlayingQueue {
         clearJobs()
         queue.clear()
         currentStream = null
+        notifyChanged()
     }
 
     /**
@@ -49,7 +58,7 @@ object PlayingQueue {
         clearJobs()
         synchronized(queue) {
             val newQueue = queue.filterIndexed { index, item -> index <= currentIndex() }
-            queue.retainAll(newQueue)
+            if (queue.retainAll(newQueue)) notifyChanged()
         }
     }
 
@@ -63,12 +72,14 @@ object PlayingQueue {
             queue.remove(stream)
             queue.add(stream)
         }
+        notifyChanged()
     }
 
     fun addAsNext(streamItem: StreamItem) = synchronized(queue) {
         if (currentStream == streamItem) return
         if (queue.contains(streamItem)) queue.remove(streamItem)
         queue.add((currentIndex() + 1).coerceAtMost(queue.size), streamItem)
+        notifyChanged()
     }
 
     // return the next item, or if repeating enabled and no video left, the first one of the queue
@@ -107,7 +118,7 @@ object PlayingQueue {
     fun updateCurrent(streamItem: StreamItem) = synchronized(queue) {
         currentStream = streamItem
 
-        if (!contains(streamItem)) add(streamItem)
+        if (!contains(streamItem)) add(streamItem) else notifyChanged()
     }
 
     fun isNotEmpty() = queue.isNotEmpty()
@@ -136,15 +147,22 @@ object PlayingQueue {
         queue.clear()
         if (!keepCurrent) currentStream = null
         queue.addAll(streams.distinctBy { it.url?.toID() })
+        notifyChanged()
     }
 
     fun remove(index: Int) = synchronized(queue) {
-        if (index in queue.indices) queue.removeAt(index)
+        if (index in queue.indices) {
+            queue.removeAt(index)
+            notifyChanged()
+        }
         return@synchronized
     }
 
     fun move(from: Int, to: Int) = synchronized(queue) {
-        if (from in queue.indices && to in queue.indices) queue.move(from, to)
+        if (from in queue.indices && to in queue.indices) {
+            queue.move(from, to)
+            notifyChanged()
+        }
     }
 
     /**

@@ -16,11 +16,8 @@ import com.github.libretube.db.obj.SubscriptionGroup
 import com.github.libretube.extensions.toID
 import com.github.libretube.helpers.PreferenceHelper
 import com.github.libretube.ui.adapters.SubscriptionChannelAdapter
-import com.github.libretube.ui.models.CommonPlayerViewModel
 import com.github.libretube.ui.models.SubscriptionsViewModel
 import com.github.libretube.ui.sheets.ChannelGroupsSheet
-import com.github.libretube.extensions.dpToPx
-import androidx.core.view.updatePadding
 import com.google.android.material.chip.Chip
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
@@ -28,7 +25,6 @@ import kotlinx.coroutines.launch
 class SubscriptionsFragment : Fragment(R.layout.fragment_subscriptions) {
     private var binding: FragmentSubscriptionsBinding? = null
     private val model: SubscriptionsViewModel by activityViewModels()
-    private val playerModel: CommonPlayerViewModel by activityViewModels()
     private val adapter = SubscriptionChannelAdapter(quickNavigation = true)
     private var selectedGroup = GROUP_ALL
     private var groups = emptyList<SubscriptionGroup>()
@@ -42,9 +38,6 @@ class SubscriptionsFragment : Fragment(R.layout.fragment_subscriptions) {
         views.channels.adapter = adapter
         adapter.stateRestorationPolicy = androidx.recyclerview.widget.RecyclerView.Adapter.StateRestorationPolicy.PREVENT_WHEN_EMPTY
         views.editGroups.setOnClickListener { ChannelGroupsSheet().show(childFragmentManager, null) }
-        playerModel.isMiniPlayerVisible.observe(viewLifecycleOwner) {
-            views.channels.updatePadding(bottom = if (it) 64f.dpToPx() else 0)
-        }
 
         viewLifecycleOwner.lifecycleScope.launch {
             combine(Database.localSubscriptionDao().observeAll(), Database.subscriptionGroupsDao().observeAll()) { savedChannels, savedGroups ->
@@ -54,8 +47,6 @@ class SubscriptionsFragment : Fragment(R.layout.fragment_subscriptions) {
                 val firstRender = views.channelGroups.childCount == 0
                 channels = newChannels.sortedBy { it.name.ifBlank { it.url }.lowercase() }
                 groups = newGroups
-                model.groups.value = groups
-                model.subscriptions.value = channels
                 if (firstRender) {
                     selectedGroup = readSelection()
                     rebuildChips()

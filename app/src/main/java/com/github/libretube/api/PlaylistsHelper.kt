@@ -79,6 +79,14 @@ object PlaylistsHelper {
         )
     }
 
+    suspend fun getPlaylistForPlayback(playlistId: String, playlistType: PlaylistType, online: Boolean): Playlist? =
+        withContext(Dispatchers.IO) {
+            if (playlistType != PlaylistType.PUBLIC) return@withContext getPlaylist(playlistId, playlistType)
+            val saved = getBookmarkSnapshot(playlistId)?.first?.takeIf { it.relatedStreams.isNotEmpty() }
+                ?: getCachedPlaylist(playlistId)
+            saved ?: if (online) getPlaylist(playlistId, playlistType) else null
+        }
+
     suspend fun getBookmarkSnapshot(playlistId: String): Pair<Playlist, Boolean>? {
         val snapshot = Database.playlistBookmarkDao().getSnapshot(playlistId) ?: return null
         val playlist = runCatching { Json.decodeFromString<Playlist>(snapshot.playlistJson) }

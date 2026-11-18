@@ -10,6 +10,7 @@ abstract class AbstractPlayerHostActivity: BaseActivity() {
     abstract fun minimizePlayerContainerLayout()
     abstract fun maximizePlayerContainerLayout()
     abstract fun setPlayerContainerProgress(progress: Float)
+    abstract fun setMiniPlayerSpace(height: Int)
 
     abstract fun clearSearchViewFocus(): Boolean
 

@@ -15,4 +15,5 @@ data class PlayerData(
     val queueName: String? = null,
     val resumePositionMs: Long? = null,
     val resumePaused: Boolean = false,
+    val allowDownloadedFallback: Boolean = false,
 ) : Parcelable

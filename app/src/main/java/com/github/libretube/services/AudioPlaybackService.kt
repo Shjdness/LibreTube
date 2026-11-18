@@ -303,6 +303,9 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
     }
 
     private fun prepareFollowingTrack() {
+        if (nextPreparation == null && (!player.isPlaying || player.duration <= 0 ||
+                player.duration - player.currentPosition > 25_000)
+        ) return
         val id = automaticCandidates().firstOrNull()
         val current = currentId
         if (id != nextPreparation?.id) clearNextPreparation()
@@ -325,7 +328,7 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
         }
     }
 
-    private suspend fun resolveAudio(id: String): ResolvedAudio? {
+    private suspend fun resolveAudio(id: String, allowNetwork: Boolean = true): ResolvedAudio? {
         val start = SystemClock.elapsedRealtime()
         return try {
             val completed = withContext(Dispatchers.IO) {
@@ -338,7 +341,7 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
                 val source = ProgressiveMediaSource.Factory(FileDataSource.Factory()).createMediaSource(item)
                 return ResolvedAudio(local.download.toStreamItem(), source, local = true)
             }
-            if (localOnly || !NetworkHelper.isNetworkAvailable(this)) return null
+            if (!allowNetwork || localOnly || !NetworkHelper.isNetworkAvailable(this)) return null
             val streams = MediaServiceRepository.instance.getStreams(id, includeDislikes = false)
             val source = onlineSource(id, streams) ?: return null
             ResolvedAudio(streams.toStreamItem(id), source, local = false)
@@ -373,10 +376,18 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
         waitingForSoundSince = transitionStartedAt
         sourceJob = scope.launch {
             try {
-                for (id in candidates) {
-                    val title = PlayingQueue.getStreams().firstOrNull { it.url?.toID() == id }?.title ?: id
-                    setPlaylistMetadata(title)
-                    val audio = if (next?.id == id && next.queued == null) next.task.await() else resolveAudio(id)
+                val tracks = PlayingQueue.getStreams()
+                val downloadedFallbackIds = if (request?.allowDownloadedFallback == true) {
+                    tracks.mapNotNull { it.url?.toID() }.filterNot(candidates::contains)
+                } else emptyList()
+                for ((index, id) in (candidates + downloadedFallbackIds).withIndex()) {
+                    val title = tracks.firstOrNull { it.url?.toID() == id }?.title ?: id
+                    val audio = if (index >= candidates.size) {
+                        resolveAudio(id, allowNetwork = false) ?: continue
+                    } else {
+                        setPlaylistMetadata(title)
+                        if (next?.id == id && next.queued == null) next.task.await() else resolveAudio(id)
+                    }
                     if (audio == null) {
                         if (automatic) failedAutomaticTracks.add(id)
                         continue

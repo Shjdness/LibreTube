@@ -60,7 +60,6 @@ class SubscriptionGroupsAdapter(
                     try {
                         val repository = UserDataRepositoryHelper.userDataRepository
                         repository.deleteSubscriptionGroup(groupName)
-                        viewModel.groups.value = repository.getSubscriptionGroups()
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

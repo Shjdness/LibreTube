@@ -247,6 +247,9 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         }
         setOnBackPressed(onBackPressedCallback)
 
+        binding.miniPlayerControls.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+            if (viewModel.isMiniPlayerVisible.value == true) activity.setMiniPlayerSpace(view.height)
+        }
         viewModel.isMiniPlayerVisible.observe(viewLifecycleOwner) { isMiniPlayerVisible ->
             // re-add the callback on top of the back pressed dispatcher listeners stack,
             // so that it's the first one to become called while the full player is visible
@@ -257,6 +260,7 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
 
             // if the player is minimized, the fragment behind the player should handle the event
             onBackPressedCallback.isEnabled = isMiniPlayerVisible != true
+            activity.setMiniPlayerSpace(if (isMiniPlayerVisible) binding.miniPlayerControls.height else 0)
         }
     }
 
@@ -330,6 +334,7 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         artworkJob?.cancel()
         brandingJob?.cancel()
         brandedTitle = null
+        updateQueueControls()
         updateTrackControls()
 
         binding.uploader.text = metadata.artist
@@ -400,12 +405,16 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         )
     }
 
+    private fun updateQueueControls() {
+        val views = _binding ?: return
+        val id = playerController?.mediaMetadata?.extras?.getString(IntentData.videoId)
+        views.prev.isEnabled = PlayingQueue.adjacentIds(id, reverse = true).isNotEmpty()
+        views.next.isEnabled = PlayingQueue.adjacentIds(id).isNotEmpty()
+    }
+
     private fun updateTrackControls() {
         val binding = _binding ?: return
         val controller = playerController ?: return
-        val id = controller.mediaMetadata.extras?.getString(IntentData.videoId)
-        binding.prev.isEnabled = PlayingQueue.adjacentIds(id, reverse = true).isNotEmpty()
-        binding.next.isEnabled = PlayingQueue.adjacentIds(id).isNotEmpty()
         val loading = !controller.isPlaying &&
             (controller.playlistMetadata.title != null ||
                 (controller.playWhenReady && controller.playbackState == Player.STATE_BUFFERING))
@@ -421,7 +430,6 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
     private fun updateSeekBar() {
         val binding = _binding ?: return
         handler.removeCallbacks(refreshPosition)
-        updateTrackControls()
         val duration = playerController?.duration?.takeIf { it > 0 } ?: let {
             // if there's no duration available, clear everything
             binding.timeBar.value = 0f
@@ -461,7 +469,13 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         }
     }
 
+    private var queueControlsJob: Job? = null
+
     private fun handleServiceConnection() {
+        queueControlsJob?.cancel()
+        queueControlsJob = viewLifecycleOwner.lifecycleScope.launch {
+            PlayingQueue.revision.collect { updateQueueControls() }
+        }
         playerController?.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 super.onIsPlayingChanged(isPlaying)
@@ -499,6 +513,8 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
     }
 
     override fun onDestroyView() {
+        (context as? AbstractPlayerHostActivity)?.setMiniPlayerSpace(0)
+        viewModel.isMiniPlayerVisible.value = false
         handler.removeCallbacksAndMessages(null)
         playerController?.release()
         playerController = null

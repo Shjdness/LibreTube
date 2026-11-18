@@ -12,7 +12,6 @@ import com.github.libretube.enums.PlaylistType
 import com.github.libretube.enums.ShareObjectType
 import com.github.libretube.enums.menuoption.PlayListBottomSheetItem
 import com.github.libretube.extensions.serializable
-import com.github.libretube.extensions.toID
 import com.github.libretube.extensions.toastFromMainDispatcher
 import com.github.libretube.helpers.BackgroundHelper
 import com.github.libretube.helpers.ContextHelper
@@ -21,7 +20,6 @@ import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.helpers.NetworkHelper
 import kotlin.coroutines.cancellation.CancellationException
 import com.github.libretube.obj.ShareData
-import com.github.libretube.parcelable.PlayerData
 
 import com.github.libretube.repo.UserDataRepositoryHelper
 import com.github.libretube.ui.activities.MainActivity
@@ -80,35 +78,29 @@ class PlaylistOptionsBottomSheet : BaseBottomSheet() {
         val mFragmentManager = (context as BaseActivity).supportFragmentManager
 
         when (playListOption) {
-            // play the playlist in the background
-            PlayListBottomSheetItem.PlayOnBackground -> {
-                val context = requireContext()
-                val online = NetworkHelper.isNetworkAvailable(context)
-                val playlist = withContext(Dispatchers.IO) {
-                    try {
-                        if (online || playlistType == PlaylistType.PRIVATE) {
-                            PlaylistsHelper.getPlaylist(playlistId, playlistType)
-                        } else PlaylistsHelper.getCachedPlaylist(playlistId)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (_: Exception) {
-                        PlaylistsHelper.getCachedPlaylist(playlistId)
-                    }
-                }
-                val queue = playlist?.relatedStreams.orEmpty()
-                val ids = queue.mapNotNull { it.url?.toID() }
-                val first = if (online) ids.firstOrNull() else
-                    DownloadHelper.getDownloadedAudioQueue(ids).firstOrNull()?.download?.videoId
-                if (first == null) context.toastFromMainDispatcher(R.string.audio_not_downloaded)
-                else {
-                    PlayingQueue.setStreams(queue)
-                    NavigationHelper.navigateVideo(context, PlayerData(first, playlistId = playlistId, keepQueue = true,
-                        playlistNextPage = playlist?.nextpage, queueName = playlistName))
-                }
-            }
-
+            PlayListBottomSheetItem.PlayOnBackground,
             PlayListBottomSheetItem.AddToQueue -> {
-                PlayingQueue.insertPlaylist(playlistId, playlistType, null)
+                val append = playListOption == PlayListBottomSheetItem.AddToQueue
+                if (arguments?.getBoolean(USE_VISIBLE_PLAYLIST) == true) {
+                    parentFragmentManager.setFragmentResult(
+                        PLAYLIST_OPTIONS_REQUEST_KEY,
+                        bundleOf(APPEND_VISIBLE_PLAYLIST to append),
+                    )
+                    return
+                }
+                val context = requireContext()
+                val playlist = try {
+                    PlaylistsHelper.getPlaylistForPlayback(
+                        playlistId, playlistType, NetworkHelper.isNetworkAvailable(context)
+                    )
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
+                NavigationHelper.playPlaylistAudio(
+                    context, playlist?.relatedStreams.orEmpty(), playlistId, playlistName, append = append,
+                )
             }
             // Clone the playlist to the users Piped account
             PlayListBottomSheetItem.Clone -> {
@@ -242,6 +234,8 @@ class PlaylistOptionsBottomSheet : BaseBottomSheet() {
     }
 
     companion object {
+        const val USE_VISIBLE_PLAYLIST = "use_visible_playlist"
+        const val APPEND_VISIBLE_PLAYLIST = "append_visible_playlist"
         const val PLAYLIST_OPTIONS_REQUEST_KEY = "playlist_options_request_key"
     }
 }

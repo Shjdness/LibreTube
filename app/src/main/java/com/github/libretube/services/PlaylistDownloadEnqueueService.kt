@@ -17,6 +17,9 @@ import com.github.libretube.api.MediaServiceRepository
 import com.github.libretube.api.PlaylistsHelper
 import com.github.libretube.api.obj.StreamItem
 import com.github.libretube.constants.IntentData
+import com.github.libretube.db.DatabaseHolder.Database
+import com.github.libretube.db.obj.PendingAudioDownload
+import com.github.libretube.db.obj.PendingPlaylistDownload
 import com.github.libretube.enums.NotificationId
 import com.github.libretube.enums.PlaylistType
 import com.github.libretube.extensions.serializableExtra
@@ -73,7 +76,10 @@ class PlaylistDownloadEnqueueService : LifecycleService() {
                 amountOfVideos = 0
                 amountOfVideosDone = 0
                 try {
+                    val dao = Database.downloadDao()
+                    dao.insertPendingPlaylist(PendingPlaylistDownload(id, type.name, playlistName.orEmpty()))
                     enqueuePlaylist()
+                    dao.removePendingPlaylist(id, type.name)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -100,14 +106,7 @@ class PlaylistDownloadEnqueueService : LifecycleService() {
     }
 
     private suspend fun enqueuePlaylist() {
-        val playlist = try {
-            PlaylistsHelper.getPlaylist(playlistId, playlistType)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            toastFromMainDispatcher(e.localizedMessage.orEmpty())
-            return
-        }
+        val playlist = PlaylistsHelper.getPlaylist(playlistId, playlistType)
 
         PlaylistsHelper.cachePlaylistForOffline(playlistId, playlist, replaceLinks = playlist.nextpage == null)
 
@@ -117,22 +116,20 @@ class PlaylistDownloadEnqueueService : LifecycleService() {
         var nextPage = playlist.nextpage
         // retry each api call once when fetching next pages to increase success chances
         var alreadyRetriedOnce = false
+        val visitedPages = mutableSetOf<String>()
 
         while (nextPage != null) {
-            val playlistPage = runCatching {
-                MediaServiceRepository.instance.getPlaylistNextPage(playlistId, nextPage!!)
-            }.getOrNull()
-
-            if (playlistPage == null && alreadyRetriedOnce) {
-                toastFromMainDispatcher(R.string.unknown_error)
-                return
-            }
-
-            if (playlistPage == null) {
-                // retry if previous attempt failed
+            val page = nextPage
+            val playlistPage = try {
+                MediaServiceRepository.instance.getPlaylistNextPage(playlistId, page)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (alreadyRetriedOnce) throw e
                 alreadyRetriedOnce = true
                 continue
             }
+            check(visitedPages.add(page) && playlistPage.nextpage !in visitedPages) { getString(R.string.unknown_error) }
 
             alreadyRetriedOnce = false
             PlaylistsHelper.cachePlaylistForOffline(playlistId, playlist.copy(relatedStreams = playlistPage.relatedStreams), replaceLinks = false)
@@ -141,14 +138,20 @@ class PlaylistDownloadEnqueueService : LifecycleService() {
         }
     }
 
-    private fun enqueueStreams(streams: List<StreamItem>) {
+    private suspend fun enqueueStreams(streams: List<StreamItem>) {
         nManager.notify(NotificationId.ENQUEUE_PLAYLIST_DOWNLOAD.id, buildNotification())
 
-        val ids = streams.mapNotNull { it.url?.toID() }
+        val ids = streams.mapNotNull { it.url?.toID() }.filter { VIDEO_ID.matches(it) }
         if (ids.isEmpty()) return
+        // Persist the page before handing off to another service.
+        Database.downloadDao().insertPendingAudio(ids.distinct().map(::PendingAudioDownload))
         DownloadHelper.downloadAudioBatch(this, ids)
         amountOfVideosDone += ids.size
         nManager.notify(NotificationId.ENQUEUE_PLAYLIST_DOWNLOAD.id, buildNotification())
+    }
+
+    private companion object {
+        val VIDEO_ID = Regex("[A-Za-z0-9_-]{11}")
     }
 
     override fun onDestroy() {

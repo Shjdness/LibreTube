@@ -16,6 +16,8 @@ import com.github.libretube.db.obj.DownloadPlaylistVideosCrossRef
 import com.github.libretube.db.obj.DownloadPlaylistWithDownload
 import com.github.libretube.db.obj.DownloadPlaylistWithDownloadWithItems
 import com.github.libretube.db.obj.DownloadWithItems
+import com.github.libretube.db.obj.PendingAudioDownload
+import com.github.libretube.db.obj.PendingPlaylistDownload
 
 @Dao
 interface DownloadDao {
@@ -34,6 +36,31 @@ interface DownloadDao {
     @Transaction
     @Query("SELECT * FROM download WHERE videoId = :videoId")
     suspend fun findById(videoId: String): DownloadWithItems?
+
+    @Transaction
+    @Query("SELECT * FROM download WHERE videoId IN (:ids)")
+    suspend fun getByIds(ids: List<String>): List<DownloadWithItems>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertPendingAudio(items: List<PendingAudioDownload>)
+
+    @Query("SELECT videoId FROM PendingAudioDownload ORDER BY rowid")
+    suspend fun getPendingAudioIds(): List<String>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertPendingPlaylist(playlist: PendingPlaylistDownload)
+
+    @Query("SELECT * FROM PendingPlaylistDownload ORDER BY rowid")
+    suspend fun getPendingPlaylists(): List<PendingPlaylistDownload>
+
+    @Query("DELETE FROM PendingPlaylistDownload WHERE playlistId = :id AND playlistType = :type")
+    suspend fun removePendingPlaylist(id: String, type: String)
+
+    @Query("SELECT (SELECT COUNT(*) FROM PendingAudioDownload) + (SELECT COUNT(*) FROM PendingPlaylistDownload)")
+    fun observePendingAudioCount(): Flow<Int>
+
+    @Query("DELETE FROM PendingAudioDownload WHERE videoId = :videoId")
+    suspend fun removePendingAudio(videoId: String)
 
     @Query("SELECT EXISTS (SELECT * FROM download WHERE videoId = :videoId)")
     suspend fun exists(videoId: String): Boolean

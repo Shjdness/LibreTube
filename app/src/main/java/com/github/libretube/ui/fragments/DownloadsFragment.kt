@@ -10,14 +10,12 @@ import android.os.Bundle
 import android.os.IBinder
 import android.os.Parcelable
 import android.view.View
-import android.view.ViewGroup.MarginLayoutParams
 import androidx.activity.OnBackPressedCallback
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
-import androidx.core.view.updateLayoutParams
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
@@ -28,7 +26,6 @@ import com.github.libretube.databinding.FragmentDownloadContentBinding
 import com.github.libretube.db.DatabaseHolder.Database
 import com.github.libretube.db.obj.DownloadWithItems
 import com.github.libretube.extensions.ceilHalf
-import com.github.libretube.extensions.dpToPx
 import com.github.libretube.extensions.formatAsFileSize
 import com.github.libretube.helpers.DownloadHelper
 import com.github.libretube.helpers.NavigationHelper
@@ -41,7 +38,6 @@ import com.github.libretube.services.DownloadService
 import com.github.libretube.ui.adapters.DownloadsAdapter
 import com.github.libretube.ui.base.DynamicLayoutManagerFragment
 import com.github.libretube.ui.extensions.setOnBackPressed
-import com.github.libretube.ui.models.CommonPlayerViewModel
 import com.github.libretube.ui.models.DownloadsViewModel
 import com.github.libretube.ui.sheets.BaseBottomSheet
 import com.github.libretube.ui.viewholders.DownloadsViewHolder
@@ -120,7 +116,6 @@ class DownloadsFragment : DynamicLayoutManagerFragment(R.layout.fragment_downloa
     private var _binding: FragmentDownloadContentBinding? = null
     private val binding get() = _binding!!
     private val downloadsModel: DownloadsViewModel by activityViewModels()
-    private val playerModel: CommonPlayerViewModel by activityViewModels()
     private lateinit var audioAdapter: DownloadsAdapter
     private lateinit var folderAdapter: DownloadFolderAdapter
     private lateinit var folderBack: OnBackPressedCallback
@@ -203,9 +198,12 @@ class DownloadsFragment : DynamicLayoutManagerFragment(R.layout.fragment_downloa
             val first = queue.firstOrNull() ?: return@setOnClickListener
             NavigationHelper.navigateDownloadedAudio(requireContext(), first.download.videoId, queue, channel?.let { channelName(first) })
         }
-        playerModel.isMiniPlayerVisible.observe(viewLifecycleOwner) { visible ->
-            binding.shuffleAll.updateLayoutParams<MarginLayoutParams> {
-                bottomMargin = (if (visible) 64f else 16f).dpToPx()
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                Database.downloadDao().observePendingAudioCount().collect {
+                    pendingAudioCount = it
+                    render()
+                }
             }
         }
         downloadsModel.searchQuery.observe(viewLifecycleOwner) { render() }
@@ -220,6 +218,8 @@ class DownloadsFragment : DynamicLayoutManagerFragment(R.layout.fragment_downloa
         }
         render()
     }
+
+    private var pendingAudioCount = 0
 
     private fun render() {
         val query = downloadsModel.searchQuery.value.orEmpty().trim()
@@ -247,7 +247,7 @@ class DownloadsFragment : DynamicLayoutManagerFragment(R.layout.fragment_downloa
         binding.downloadsEmpty.isVisible = displayed.isEmpty()
         binding.deleteAll.isVisible = !showFolders && displayed.isNotEmpty()
         binding.shuffleAll.isVisible = !showFolders && displayed.any { it.finishedAudio != null }
-        binding.resumeAll.isVisible = items.any { it.audioItem?.isFinished == false }
+        binding.resumeAll.isVisible = pendingAudioCount > 0 || items.any { it.audioItem?.isFinished == false }
     }
 
     private fun shelfItems() = sortDownloads(items.filter { channel == null || it.channelKey == channel }, DownloadSortingOrder.entries[sortIndex])

@@ -10,6 +10,8 @@ import androidx.core.os.bundleOf
 import androidx.fragment.app.commitNow
 import androidx.fragment.app.replace
 import com.github.libretube.NavDirections
+import com.github.libretube.api.obj.StreamItem
+import com.github.libretube.extensions.toastFromMainDispatcher
 import com.github.libretube.R
 import com.github.libretube.constants.IntentData
 import com.github.libretube.enums.PlaylistType
@@ -44,6 +46,41 @@ object NavigationHelper {
         if (downloaded.none { it.url?.toID() == videoId }) return
         PlayingQueue.setStreams(downloaded)
         navigateVideo(context, PlayerData(videoId, keepQueue = true, isOffline = true, queueName = queueName))
+    }
+
+    suspend fun playPlaylistAudio(
+        context: Context,
+        items: List<StreamItem>,
+        playlistId: String,
+        name: String?,
+        clicked: StreamItem? = null,
+        append: Boolean = false,
+    ) {
+        val offline = !NetworkHelper.isNetworkAvailable(context)
+        val ordered = items.filter { !it.url.isNullOrBlank() }
+        val eligible = if (offline) {
+            val available = DownloadHelper.getDownloadedAudioQueue(ordered.mapNotNull { it.url?.toID() })
+                .mapTo(hashSetOf()) { it.download.videoId }
+            ordered.filter { it.url?.toID() in available }
+        } else ordered
+        if (eligible.isEmpty() || (clicked != null && clicked !in eligible)) {
+            context.toastFromMainDispatcher(R.string.audio_not_downloaded)
+            return
+        }
+        if (append) {
+            PlayingQueue.add(*eligible.toTypedArray(), skipExisting = true)
+            return
+        }
+        val id = (clicked ?: eligible.first()).url?.toID() ?: return
+        PlayingQueue.setStreams(eligible)
+        navigateVideo(context, PlayerData(
+            videoId = id,
+            playlistId = playlistId,
+            keepQueue = true,
+            isOffline = offline,
+            queueName = name,
+            allowDownloadedFallback = clicked == null,
+        ))
     }
 
     @SuppressLint("UnsafeOptInUsageError")

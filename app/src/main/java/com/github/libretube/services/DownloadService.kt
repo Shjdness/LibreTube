@@ -30,8 +30,10 @@ import com.github.libretube.db.DatabaseHolder.Database
 import com.github.libretube.db.obj.Download
 import com.github.libretube.db.obj.DownloadChapter
 import com.github.libretube.db.obj.DownloadItem
+import com.github.libretube.db.obj.PendingAudioDownload
 import com.github.libretube.enums.FileType
 import com.github.libretube.enums.NotificationId
+import com.github.libretube.enums.PlaylistType
 import com.github.libretube.extensions.TAG
 import com.github.libretube.extensions.formatAsFileSize
 import com.github.libretube.extensions.getWhileDigit
@@ -156,23 +158,10 @@ class DownloadService : LifecycleService() {
                     ACTION_DOWNLOAD_PAUSE -> pauseDownload(downloadId)
                     ACTION_DOWNLOAD_STOP -> stopDownload(downloadId)
                     ACTION_RESUME_ALL -> resumeAll()
-                    ACTION_ENQUEUE_AUDIO_BATCH -> {
-                        val ids = intent.getStringArrayListExtra(EXTRA_AUDIO_IDS).orEmpty()
-                        coroutineScope {
-                            ids.distinct().forEach { id ->
-                                launch {
-                                    try {
-                                        enqueueAudio(id)
-                                    } catch (e: CancellationException) {
-                                        throw e
-                                    } catch (e: Exception) {
-                                        reportDownloadFailure(e, -1)
-                                    }
-                                }
-                            }
-                        }
+                    ACTION_ENQUEUE_AUDIO_BATCH -> submitAudio(intent.getStringArrayListExtra(EXTRA_AUDIO_IDS).orEmpty())
+                    else -> intent?.parcelableExtra<DownloadData>(IntentData.downloadData)?.let {
+                        submitAudio(listOf(it.videoId))
                     }
-                    else -> intent?.parcelableExtra<DownloadData>(IntentData.downloadData)?.let { enqueueAudio(it.videoId) }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -186,14 +175,43 @@ class DownloadService : LifecycleService() {
         return START_NOT_STICKY
     }
 
+    private suspend fun submitAudio(ids: List<String>) {
+        val videoIds = ids.filter(VIDEO_ID::matches).distinct()
+        if (videoIds.isEmpty()) return
+        Database.downloadDao().insertPendingAudio(videoIds.map(::PendingAudioDownload))
+        processPendingAudio(videoIds)
+    }
+
+    private suspend fun processPendingAudio(ids: List<String>) {
+        for (batch in ids.chunked(12)) {
+            coroutineScope {
+                batch.forEach { id ->
+                    launch {
+                        try {
+                            enqueueAudio(id)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            reportDownloadFailure(e, -1)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private suspend fun enqueueAudio(videoId: String) {
         if (!pendingAudio.add(videoId)) return
         try {
             val previous = Database.downloadDao().findById(videoId)?.downloadItems.orEmpty()
                 .filter { it.type == FileType.AUDIO }
-            if (previous.any { it.isFinished }) return
+            if (previous.any { it.isFinished }) {
+                Database.downloadDao().removePendingAudio(videoId)
+                return
+            }
             val existing = previous.firstOrNull { it.path.exists() }
             if (existing != null) {
+                Database.downloadDao().removePendingAudio(videoId)
                 if (!isDownloading(existing.id)) queueDownload(existing.id)
                 return
             }
@@ -201,12 +219,14 @@ class DownloadService : LifecycleService() {
             val streams = loadStreamsInfo(videoId) ?: return
             val audio = streams.audioStreams.maxByOrNull(::audioBitrate)
             if (audio == null || streams.isLive) {
+                Database.downloadDao().removePendingAudio(videoId)
                 toastFromMainDispatcher(R.string.unknown_error)
                 return
             }
             storeVideoMetadata(videoId, streams)
             previous.forEach { Database.downloadDao().deleteDownloadItemById(it.id) }
             start(audio.toDownloadItem(FileType.AUDIO, videoId))
+            Database.downloadDao().removePendingAudio(videoId)
         } finally {
             pendingAudio.remove(videoId)
         }
@@ -460,9 +480,16 @@ class DownloadService : LifecycleService() {
     }
 
     private suspend fun resumeAll() {
-        val incomplete = Database.downloadDao().getAll().flatMap { it.downloadItems }
-            .filter { it.type == FileType.AUDIO && !it.isFinished && it.path.exists() }
-        incomplete.forEach { queueDownload(it.id) }
+        val dao = Database.downloadDao()
+        val incomplete = dao.getAll().flatMap { it.downloadItems }
+            .filter { it.type == FileType.AUDIO && !it.isFinished }
+            .map { it.videoId }
+        dao.getPendingPlaylists().forEach { pending ->
+            val type = PlaylistType.entries.find { it.name == pending.playlistType }
+            if (type == null) dao.removePendingPlaylist(pending.playlistId, pending.playlistType)
+            else DownloadHelper.downloadPlaylistAudio(this, pending.playlistId, pending.name, type)
+        }
+        submitAudio(dao.getPendingAudioIds() + incomplete)
     }
 
     private suspend fun stopDownload(id: Int) {
@@ -649,6 +676,7 @@ class DownloadService : LifecycleService() {
         const val ACTION_ENQUEUE_AUDIO_BATCH = "com.github.libretube.services.DownloadService.ENQUEUE_AUDIO_BATCH"
         const val EXTRA_AUDIO_IDS = "audioIds"
 
+        private val VIDEO_ID = Regex("[A-Za-z0-9_-]{11}")
         private const val MAX_SEGMENT_RETRIES = 3
         @Volatile var IS_DOWNLOAD_RUNNING = false
             private set

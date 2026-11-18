@@ -2,7 +2,6 @@ package com.github.libretube.ui.sheets
 
 import android.os.Bundle
 import android.view.View
-import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import com.github.libretube.R
 import com.github.libretube.constants.IntentData
@@ -11,13 +10,10 @@ import com.github.libretube.extensions.toID
 import com.github.libretube.extensions.toastFromMainDispatcher
 import com.github.libretube.repo.UserDataRepositoryHelper
 import com.github.libretube.ui.adapters.AddChannelToGroupAdapter
-import com.github.libretube.ui.models.SubscriptionsViewModel
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 
 class AddChannelToGroupSheet : ExpandedBottomSheet(R.layout.dialog_add_channel_to_group) {
-    private val viewModel: SubscriptionsViewModel by activityViewModels()
-
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val binding = DialogAddChannelToGroupBinding.bind(view)
@@ -49,7 +45,6 @@ class AddChannelToGroupSheet : ExpandedBottomSheet(R.layout.dialog_add_channel_t
                 viewLifecycleOwner.lifecycleScope.launch {
                     try {
                         repository.updateChannelGroups(id, groups.mapTo(mutableSetOf()) { it.name }, chosen)
-                        viewModel.groups.value = repository.getSubscriptionGroups()
                         dismiss()
                     } catch (e: CancellationException) {
                         throw e
