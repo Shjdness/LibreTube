@@ -192,6 +192,9 @@ class DownloadsFragment : DynamicLayoutManagerFragment(R.layout.fragment_downloa
             DownloadHelper.requestForegroundDownload(requireContext(),
                 Intent(requireContext(), DownloadService::class.java).setAction(DownloadService.ACTION_RESUME_ALL))
         }
+        binding.downloadTasks.setOnClickListener {
+            com.github.libretube.ui.dialogs.DownloadTasksDialog().show(childFragmentManager, "download-tasks")
+        }
         binding.deleteAll.setOnClickListener { showDeleteAllDialog() }
         binding.shuffleAll.setOnClickListener {
             val queue = shelfItems().filter { it.finishedAudio != null }.shuffled()

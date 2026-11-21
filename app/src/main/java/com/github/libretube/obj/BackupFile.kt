@@ -29,6 +29,10 @@ data class BackupFile(
     var searchHistory: List<SearchHistoryItem>? = emptyList(),
     var customInstances: List<CustomInstance>? = emptyList(),
     var playlistBookmarks: List<PlaylistBookmark>? = emptyList(),
+    var bookmarkSnapshots: List<com.github.libretube.db.obj.BookmarkSnapshot>? = emptyList(),
+    var pendingAudio: List<com.github.libretube.db.obj.PendingAudioDownload>? = emptyList(),
+    var pendingPlaylists: List<com.github.libretube.db.obj.PendingPlaylistDownload>? = emptyList(),
+    var downloads: List<OfflineDownloadBackup>? = emptyList(),
 
     //
     // Preferences, stored as a key value map

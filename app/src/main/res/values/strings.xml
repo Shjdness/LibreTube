@@ -600,4 +600,20 @@
     <string name="next_audio_track">Next track</string>
     <string name="loading_audio_track">Loading %1$s</string>
     <string name="download_start_unavailable">Android could not start the download. Open Libreplayer and try again.</string>
+    <string name="backup_metadata">Library data and download index</string>
+    <string name="backup_with_audio">Library data and downloaded audio (ZIP)</string>
+    <string name="download_tasks">Download tasks</string>
+    <string name="download_pending">Waiting, paused or processing</string>
+    <string name="cancel_download_task">Cancel task</string>
+    <string name="download_task_cancelled">Task cancelled or paused</string>
+    <string name="download_retry_failed">Download interrupted after several retries. Check the connection and resume.</string>
+    <string name="audio_local_missing">Local audio is missing or unreadable</string>
+    <string name="audio_network_failed">Unable to load online audio. Check the connection or resource availability.</string>
+    <string name="audio_skipping_failed">Skipped an unavailable track in this queue</string>
+    <string name="audio_resolving">Connecting · %1$s</string>
+    <string name="audio_reading_local">Reading local audio · %1$s</string>
+    <string name="audio_buffering">Buffering · %1$s</string>
+    <string name="library_pins">Manage pinned items</string>
+    <string name="download_rescan">Rescan playlist</string>
+<string name="library_search">Search by name</string>
 </resources>

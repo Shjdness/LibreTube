@@ -56,7 +56,7 @@ import com.github.libretube.db.obj.WatchPosition
         SubscriptionGroup::class,
         SubscriptionsFeedItem::class
     ],
-    version = 28,
+    version = 29,
     autoMigrations = [
         AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9),
@@ -71,6 +71,7 @@ import com.github.libretube.db.obj.WatchPosition
         AutoMigration(from = 25, to = 26, spec = DatabaseHolder.MIGRATION_25_26::class),
         AutoMigration(from = 26, to = 27),
         AutoMigration(from = 27, to = 28),
+        AutoMigration(from = 28, to = 29),
     ]
 )
 @TypeConverters(Converters::class)

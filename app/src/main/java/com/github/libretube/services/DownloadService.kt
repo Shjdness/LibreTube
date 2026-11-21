@@ -178,7 +178,7 @@ class DownloadService : LifecycleService() {
     private suspend fun submitAudio(ids: List<String>) {
         val videoIds = ids.filter(VIDEO_ID::matches).distinct()
         if (videoIds.isEmpty()) return
-        Database.downloadDao().insertPendingAudio(videoIds.map(::PendingAudioDownload))
+        Database.downloadDao().insertPendingAudio(videoIds.map { PendingAudioDownload(it) })
         processPendingAudio(videoIds)
     }
 
@@ -192,6 +192,7 @@ class DownloadService : LifecycleService() {
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
+                            Database.downloadDao().failPendingAudio(id, e.localizedMessage.orEmpty().take(300))
                             reportDownloadFailure(e, -1)
                         }
                     }
@@ -203,6 +204,7 @@ class DownloadService : LifecycleService() {
     private suspend fun enqueueAudio(videoId: String) {
         if (!pendingAudio.add(videoId)) return
         try {
+            Database.downloadDao().failPendingAudio(videoId, "")
             val previous = Database.downloadDao().findById(videoId)?.downloadItems.orEmpty()
                 .filter { it.type == FileType.AUDIO }
             if (previous.any { it.isFinished }) {
@@ -217,13 +219,16 @@ class DownloadService : LifecycleService() {
             }
 
             val streams = loadStreamsInfo(videoId) ?: return
+            if (!Database.downloadDao().hasPendingAudio(videoId)) return
+            Database.downloadDao().namePendingAudio(videoId, streams.title)
             val audio = streams.audioStreams.maxByOrNull(::audioBitrate)
             if (audio == null || streams.isLive) {
-                Database.downloadDao().removePendingAudio(videoId)
+                Database.downloadDao().failPendingAudio(videoId, getString(R.string.audio_stream_unavailable))
                 toastFromMainDispatcher(R.string.unknown_error)
                 return
             }
             storeVideoMetadata(videoId, streams)
+            if (!Database.downloadDao().hasPendingAudio(videoId)) return
             previous.forEach { Database.downloadDao().deleteDownloadItemById(it.id) }
             start(audio.toDownloadItem(FileType.AUDIO, videoId))
             Database.downloadDao().removePendingAudio(videoId)
@@ -244,6 +249,7 @@ class DownloadService : LifecycleService() {
             throw e
         } catch (e: Exception) {
             Log.e(TAG(), e.stackTraceToString())
+            Database.downloadDao().failPendingAudio(videoId, e.localizedMessage.orEmpty().take(300))
             toastFromMainDispatcher(e.localizedMessage.orEmpty())
             return null
         }
@@ -283,10 +289,8 @@ class DownloadService : LifecycleService() {
         // asynchronously load the remaining metadata
         // this allows the main thread to already start the actual download items (i.e. video/audio)
         // while the thumbnail is loaded in the background
-        coroutineScope {
-            launch(Dispatchers.IO) {
+        workerScope.launch(Dispatchers.IO) {
                 downloadExtraVideoMetadata(videoId, streams.thumbnailUrl, thumbnailTargetPath)
-            }
         }
     }
 
@@ -375,6 +379,7 @@ class DownloadService : LifecycleService() {
                             delay(200)
                             numberOfTries++
                         } else {
+                            reportDownloadFailure(java.io.IOException(getString(R.string.download_retry_failed)), item.id)
                             setPauseNotification(notificationBuilder, item, false)
                             pauseDownload(item.id)
                             break
@@ -402,6 +407,14 @@ class DownloadService : LifecycleService() {
     }
 
     private suspend fun reportDownloadFailure(error: Exception, id: Int) {
+        if (id >= 0) {
+            val dao = Database.downloadDao()
+            dao.findDownloadItemById(id)?.let { item ->
+                val title = dao.findById(item.videoId)?.download?.title.orEmpty()
+                dao.insertPendingAudio(listOf(PendingAudioDownload(item.videoId, title)))
+                dao.failPendingAudio(item.videoId, error.localizedMessage.orEmpty().take(300))
+            }
+        }
         Log.e(TAG(), "Audio download failed", error)
         val message = error.localizedMessage ?: getString(R.string.unknown_error)
         toastFromMainDispatcher(getString(R.string.download) + ": " + message)

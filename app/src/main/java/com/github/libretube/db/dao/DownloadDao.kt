@@ -21,6 +21,30 @@ import com.github.libretube.db.obj.PendingPlaylistDownload
 
 @Dao
 interface DownloadDao {
+    @Query("SELECT * FROM PendingAudioDownload ORDER BY rowid")
+    fun observePendingAudio(): Flow<List<PendingAudioDownload>>
+
+    @Query("SELECT * FROM PendingAudioDownload ORDER BY rowid")
+    suspend fun getPendingAudio(): List<PendingAudioDownload>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM PendingAudioDownload WHERE videoId = :id)")
+    suspend fun hasPendingAudio(id: String): Boolean
+
+    @Query("SELECT * FROM PendingPlaylistDownload ORDER BY rowid")
+    fun observePendingPlaylists(): Flow<List<PendingPlaylistDownload>>
+
+    @Query("SELECT * FROM PendingPlaylistDownload WHERE playlistId = :id AND playlistType = :type")
+    suspend fun getPendingPlaylist(id: String, type: String): PendingPlaylistDownload?
+
+    @Update
+    suspend fun updatePendingPlaylist(item: PendingPlaylistDownload)
+
+    @Query("UPDATE PendingAudioDownload SET title = :title WHERE videoId = :id AND title = ''")
+    suspend fun namePendingAudio(id: String, title: String)
+
+    @Query("UPDATE PendingAudioDownload SET error = :error WHERE videoId = :id")
+    suspend fun failPendingAudio(id: String, error: String)
+
     @Transaction
     @Query("SELECT * FROM download")
     suspend fun getAll(): List<DownloadWithItems>

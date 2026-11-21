@@ -3,6 +3,7 @@ package com.github.libretube.ui.adapters
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.core.os.bundleOf
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.ListAdapter
 import com.github.libretube.R
 import com.github.libretube.api.obj.Playlists
@@ -32,6 +33,8 @@ class PlaylistsAdapter(
         val playlist = getItem(holder.bindingAdapterPosition)
         holder.binding.apply {
             playlistTitle.text = playlist.name
+            playlistDescription.text = playlist.shortDescription
+            playlistDescription.isVisible = !playlist.shortDescription.isNullOrBlank()
 
             videoCount.text = playlist.videos.toString()
 

@@ -14,6 +14,7 @@ import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.databinding.DialogImportExportFormatChooserBinding
 import com.github.libretube.enums.ImportFormat
 import com.github.libretube.helpers.BackupHelper
+import com.github.libretube.extensions.toastFromMainDispatcher
 import com.github.libretube.helpers.ImportHelper
 import com.github.libretube.helpers.PreferenceHelper
 import com.github.libretube.obj.BackupFile
@@ -31,6 +32,8 @@ import kotlinx.serialization.json.Json
 
 class BackupRestoreSettings : BasePreferenceFragment() {
     private var backupFile = BackupFile()
+    private var backupName: String? = null
+    private var includeAudio = false
     private var importFormat: ImportFormat = ImportFormat.NEWPIPE
 
     // backup and restore database
@@ -38,19 +41,39 @@ class BackupRestoreSettings : BasePreferenceFragment() {
         registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             if (uri == null) return@registerForActivityResult
             CoroutineScope(Dispatchers.IO).launch {
-                BackupHelper.restoreAdvancedBackup(requireContext().applicationContext, uri)
-                withContext(Dispatchers.Main) {
-                    // could fail if fragment is already closed
-                    runCatching {
-                        RequireRestartDialog().show(childFragmentManager, this::class.java.name)
+                val appContext = context?.applicationContext ?: return@launch
+                try {
+                    BackupHelper.restoreAdvancedBackup(appContext, uri)
+                    withContext(Dispatchers.Main) {
+                        // could fail if fragment is already closed
+                        runCatching {
+                            RequireRestartDialog().show(childFragmentManager, this::class.java.name)
+                        }
                     }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    appContext.toastFromMainDispatcher(appContext.getString(R.string.backup_creation_failed) + " · " + e.localizedMessage.orEmpty())
                 }
             }
         }
     private val createBackupFile = registerForActivityResult(CreateDocument(FILETYPE_ANY)) { uri ->
         if (uri == null) return@registerForActivityResult
+        val appContext = requireContext().applicationContext
         lifecycleScope.launch(Dispatchers.IO) {
-            BackupHelper.createAdvancedBackup(requireContext().applicationContext, uri, backupFile)
+            try {
+                val name = backupName ?: return@launch
+                if (!name.matches(Regex("backup-[A-Za-z0-9-]+\\.json"))) return@launch
+                val file = java.io.File(appContext.cacheDir, name)
+                if (!file.isFile) return@launch
+                backupFile = Json.decodeFromString(file.readText())
+                BackupHelper.createAdvancedBackup(appContext, uri, backupFile, includeAudio)
+                file.delete()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                appContext.toastFromMainDispatcher(R.string.backup_creation_failed)
+            }
         }
     }
 
@@ -120,6 +143,8 @@ class BackupRestoreSettings : BasePreferenceFragment() {
         }
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+        backupName = savedInstanceState?.getString("backup_name")
+        includeAudio = savedInstanceState?.getBoolean("include_audio") ?: false
         setPreferencesFromResource(R.xml.import_export_settings, rootKey)
 
         val importSubscriptions = findPreference<Preference>("import_subscriptions")
@@ -197,10 +222,14 @@ class BackupRestoreSettings : BasePreferenceFragment() {
             BACKUP_DIALOG_REQUEST_KEY,
             this
         ) { _, resultBundle ->
-            val encodedBackupFile = resultBundle.getString(IntentData.backupFile)!!
-            backupFile = Json.decodeFromString(encodedBackupFile)
-            val timestamp = TextUtils.getFileSafeTimeStampNow()
-            createBackupFile.launch("libretube-backup-${timestamp}.json")
+            backupName = resultBundle.getString(IntentData.backupFile)
+            MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.backup)
+                .setItems(arrayOf(getString(R.string.backup_metadata), getString(R.string.backup_with_audio))) { _, index ->
+                    includeAudio = index == 1
+                    val timestamp = TextUtils.getFileSafeTimeStampNow()
+                    val extension = if (includeAudio) "zip" else "json"
+                    createBackupFile.launch("libreplayer-backup-$timestamp.$extension")
+                }.setNegativeButton(R.string.cancel, null).show()
         }
         val advancedBackup = findPreference<Preference>("backup")
         advancedBackup?.setOnPreferenceClickListener {
@@ -210,9 +239,15 @@ class BackupRestoreSettings : BasePreferenceFragment() {
 
         val restoreAdvancedBackup = findPreference<Preference>("restore")
         restoreAdvancedBackup?.setOnPreferenceClickListener {
-            getBackupFile.launch(JSON)
+            getBackupFile.launch("*/*")
             true
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("backup_name", backupName)
+        outState.putBoolean("include_audio", includeAudio)
+        super.onSaveInstanceState(outState)
     }
 
     companion object {

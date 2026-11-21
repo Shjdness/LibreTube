@@ -3,6 +3,10 @@ package com.github.libretube.helpers
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.room.withTransaction
+import java.io.File
+import java.nio.file.Files
+import kotlinx.coroutines.CancellationException
 import androidx.core.content.edit
 import androidx.preference.PreferenceManager
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -32,12 +36,14 @@ object BackupHelper {
      * Write a [BackupFile] containing the database content as well as the preferences
      */
     @OptIn(ExperimentalSerializationApi::class)
-    suspend fun createAdvancedBackup(context: Context, uri: Uri, backupFile: BackupFile) {
+    suspend fun createAdvancedBackup(context: Context, uri: Uri, backupFile: BackupFile, includeAudio: Boolean = false) {
         try {
-            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                JsonHelper.json.encodeToStream(backupFile, outputStream)
+            requireNotNull(context.contentResolver.openOutputStream(uri)).use { outputStream ->
+                OfflineBackupHelper.write(context, outputStream, backupFile, includeAudio)
             }
             context.toastFromMainDispatcher(R.string.backup_creation_success)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG(), "Error while writing backup: $e")
             context.toastFromMainDispatcher(R.string.backup_creation_failed)
@@ -49,36 +55,78 @@ object BackupHelper {
      */
     @OptIn(ExperimentalSerializationApi::class)
     suspend fun restoreAdvancedBackup(context: Context, uri: Uri) = withContext(Dispatchers.IO) {
-        val backupFile = context.contentResolver.openInputStream(uri)?.use {
-            JsonHelper.json.decodeFromStream<BackupFile>(it)
-        } ?: return@withContext
-
-        Database.watchHistoryDao().insertAll(backupFile.watchHistory.orEmpty())
-        Database.searchHistoryDao().insertAll(backupFile.searchHistory.orEmpty())
-        Database.watchPositionDao().insertAll(backupFile.watchPositions.orEmpty())
-        Database.localSubscriptionDao().insertAll(backupFile.subscriptions.orEmpty())
-        Database.customInstanceDao().insertAll(backupFile.customInstances.orEmpty())
-        Database.playlistBookmarkDao().insertAll(backupFile.playlistBookmarks.orEmpty())
-        Database.subscriptionGroupsDao().insertAll(backupFile.groups.orEmpty())
-
-        backupFile.localPlaylists?.forEach {
-            // the playlist will be created with an id of 0, so that Room will auto generate a
-            // new playlist id to avoid conflicts with existing local playlists
-            val playlistId = Database.localPlaylistsDao().createPlaylist(it.playlist.copy(id = 0))
-            it.videos.forEach { playlistItem ->
-                playlistItem.playlistId = playlistId.toInt()
-                Database.localPlaylistsDao().addPlaylistVideo(playlistItem.copy(id = 0))
+        val staging = Files.createTempDirectory(context.cacheDir.toPath(), "restore-").toFile()
+        val created = mutableListOf<File>()
+        var committed = false
+        try {
+            val backupFile = requireNotNull(context.contentResolver.openInputStream(uri)).use {
+                OfflineBackupHelper.read(it, staging)
             }
-        }
+            val playlistIds = mutableMapOf<String, String>()
+            Database.withTransaction {
 
-        restorePreferences(context, backupFile.preferences)
+                Database.watchHistoryDao().insertAll(backupFile.watchHistory.orEmpty())
+                Database.searchHistoryDao().insertAll(backupFile.searchHistory.orEmpty())
+                Database.watchPositionDao().insertAll(backupFile.watchPositions.orEmpty())
+                Database.localSubscriptionDao().insertAll(backupFile.subscriptions.orEmpty())
+                Database.customInstanceDao().insertAll(backupFile.customInstances.orEmpty())
+                Database.playlistBookmarkDao().insertAll(backupFile.playlistBookmarks.orEmpty())
+                Database.subscriptionGroupsDao().insertAll(backupFile.groups.orEmpty())
+                backupFile.bookmarkSnapshots.orEmpty().forEach {
+                    if (Database.playlistBookmarkDao().includes(it.playlistId)) {
+                        val existing = Database.playlistBookmarkDao().getSnapshot(it.playlistId)
+                        if (existing == null || (!existing.complete && it.trackCount >= existing.trackCount)) {
+                            Database.playlistBookmarkDao().upsertSnapshot(it)
+                        }
+                    }
+                }
+
+                val existingPlaylists = Database.localPlaylistsDao().getAll()
+                backupFile.localPlaylists?.forEach {
+                    val matching = existingPlaylists.firstOrNull { existing ->
+                        existing.playlist.name == it.playlist.name &&
+                            existing.videos.map { item -> item.videoId } == it.videos.map { item -> item.videoId }
+                    }
+                    if (matching != null) {
+                        playlistIds[it.playlist.id.toString()] = matching.playlist.id.toString()
+                        return@forEach
+                    }
+                    // the playlist will be created with an id of 0, so that Room will auto generate a
+                    // new playlist id to avoid conflicts with existing local playlists
+                    val playlistId = Database.localPlaylistsDao().createPlaylist(it.playlist.copy(id = 0))
+                    playlistIds[it.playlist.id.toString()] = playlistId.toString()
+                    it.videos.forEach { playlistItem ->
+                        playlistItem.playlistId = playlistId.toInt()
+                        Database.localPlaylistsDao().addPlaylistVideo(playlistItem.copy(id = 0))
+                    }
+                }
+                Database.downloadDao().insertPendingAudio(backupFile.pendingAudio.orEmpty())
+                backupFile.pendingPlaylists.orEmpty().forEach {
+                    val id = if (it.playlistType == "PUBLIC") it.playlistId else playlistIds[it.playlistId]
+                    if (id != null) Database.downloadDao().insertPendingPlaylist(it.copy(playlistId = id))
+                }
+                OfflineBackupHelper.restoreDownloads(context, backupFile.downloads.orEmpty(), staging, created)
+            }
+            committed = true
+
+            val preferences = backupFile.preferences?.map { item ->
+                if (item.key == "library_pins_0") item.copy(value = kotlinx.serialization.json.JsonPrimitive(
+                    item.value.content.split(',').mapNotNull(playlistIds::get).joinToString(",")
+                )) else item
+            }
+            restorePreferences(context, preferences)
+        } finally {
+            if (!committed) created.forEach { it.delete() }
+            staging.listFiles()?.forEach { it.delete() }
+            staging.delete()
+        }
     }
 
     /**
      * Restore the shared preferences from a backup file
      */
     private fun restorePreferences(context: Context, preferences: List<PreferenceItem>?) {
-        if (preferences == null) return
+        if (preferences.isNullOrEmpty()) return
 
         PreferenceManager.getDefaultSharedPreferences(context).edit(commit = true) {
             // clear the previous settings

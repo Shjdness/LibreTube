@@ -420,8 +420,20 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
                 (controller.playWhenReady && controller.playbackState == Player.STATE_BUFFERING))
         val trackTitle = brandedTitle ?: controller.mediaMetadata.title
         val pendingTitle = controller.playlistMetadata.title ?: trackTitle
-        val title = if (loading && pendingTitle != null) getString(R.string.loading_audio_track, pendingTitle)
-            else trackTitle
+        val error = controller.playlistMetadata.extras?.getString("audio_error")
+        val title = when {
+            controller.isPlaying -> trackTitle
+            error != null -> if (trackTitle.isNullOrBlank()) error else "$trackTitle · $error"
+            loading && pendingTitle != null -> {
+                val status = when {
+                    controller.playlistMetadata.title != null -> R.string.audio_resolving
+                    controller.mediaMetadata.extras?.getBoolean(IntentData.localAudio) == true -> R.string.audio_reading_local
+                    else -> R.string.audio_buffering
+                }
+                getString(status, pendingTitle)
+            }
+            else -> trackTitle
+        }
         binding.progress.isVisible = loading
         if (binding.title.text != title) binding.title.text = title
         if (binding.miniPlayerTitle.text != title) binding.miniPlayerTitle.text = title

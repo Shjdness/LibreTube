@@ -11,6 +11,9 @@ import com.github.libretube.db.obj.PlaylistBookmark
 
 @Dao
 interface PlaylistBookmarkDao {
+    @Query("SELECT * FROM BookmarkSnapshot")
+    suspend fun getSnapshots(): List<BookmarkSnapshot>
+
     @Query("SELECT * FROM playlistBookmark")
     suspend fun getAll(): List<PlaylistBookmark>
 

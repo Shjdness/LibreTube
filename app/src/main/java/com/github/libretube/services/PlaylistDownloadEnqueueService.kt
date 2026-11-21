@@ -16,6 +16,7 @@ import com.github.libretube.R
 import com.github.libretube.api.MediaServiceRepository
 import com.github.libretube.api.PlaylistsHelper
 import com.github.libretube.api.obj.StreamItem
+import com.github.libretube.api.obj.Playlist
 import com.github.libretube.constants.IntentData
 import com.github.libretube.db.DatabaseHolder.Database
 import com.github.libretube.db.obj.PendingAudioDownload
@@ -30,6 +31,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import androidx.room.withTransaction
 import kotlin.coroutines.cancellation.CancellationException
 
 class PlaylistDownloadEnqueueService : LifecycleService() {
@@ -83,6 +85,10 @@ class PlaylistDownloadEnqueueService : LifecycleService() {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
+                    val dao = Database.downloadDao()
+                    dao.getPendingPlaylist(id, type.name)?.let {
+                        dao.updatePendingPlaylist(it.copy(error = e.localizedMessage.orEmpty().take(300)))
+                    }
                     Log.e("PlaylistAudioDownload", "Unable to enqueue playlist audio", e)
                     toastFromMainDispatcher(e.localizedMessage ?: getString(R.string.unknown_error))
                 } finally {
@@ -106,14 +112,22 @@ class PlaylistDownloadEnqueueService : LifecycleService() {
     }
 
     private suspend fun enqueuePlaylist() {
-        val playlist = PlaylistsHelper.getPlaylist(playlistId, playlistType)
-
-        PlaylistsHelper.cachePlaylistForOffline(playlistId, playlist, replaceLinks = playlist.nextpage == null)
-
-        amountOfVideos = playlist.videos
-        enqueueStreams(playlist.relatedStreams)
-
-        var nextPage = playlist.nextpage
+        val dao = Database.downloadDao()
+        var pending = dao.getPendingPlaylist(playlistId, playlistType.name) ?: return
+        pending = pending.copy(error = "")
+        dao.updatePendingPlaylist(pending)
+        val playlist = if (pending.nextPage == null) {
+            PlaylistsHelper.getPlaylist(playlistId, playlistType)
+        } else Playlist(name = playlistName)
+        var nextPage = pending.nextPage
+        if (nextPage == null) {
+            amountOfVideos = playlist.videos
+            PlaylistsHelper.cachePlaylistForOffline(playlistId, playlist, replaceLinks = playlist.nextpage == null)
+            enqueueStreams(playlist.relatedStreams)
+            nextPage = playlist.nextpage
+            pending = pending.copy(nextPage = nextPage, discovered = amountOfVideosDone, error = "")
+            dao.updatePendingPlaylist(pending)
+        } else amountOfVideosDone = pending.discovered
         // retry each api call once when fetching next pages to increase success chances
         var alreadyRetriedOnce = false
         val visitedPages = mutableSetOf<String>()
@@ -133,18 +147,31 @@ class PlaylistDownloadEnqueueService : LifecycleService() {
 
             alreadyRetriedOnce = false
             PlaylistsHelper.cachePlaylistForOffline(playlistId, playlist.copy(relatedStreams = playlistPage.relatedStreams), replaceLinks = false)
+            // Persist the discovered page before moving the cursor. Replaying a page is idempotent.
             enqueueStreams(playlistPage.relatedStreams)
             nextPage = playlistPage.nextpage
+            pending = pending.copy(nextPage = nextPage, discovered = amountOfVideosDone, error = "")
+            if (nextPage == null) dao.removePendingPlaylist(playlistId, playlistType.name)
+            else dao.updatePendingPlaylist(pending)
         }
     }
 
     private suspend fun enqueueStreams(streams: List<StreamItem>) {
+        if (Database.downloadDao().getPendingPlaylist(playlistId, playlistType.name) == null) {
+            throw CancellationException("Playlist download cancelled")
+        }
         nManager.notify(NotificationId.ENQUEUE_PLAYLIST_DOWNLOAD.id, buildNotification())
 
         val ids = streams.mapNotNull { it.url?.toID() }.filter { VIDEO_ID.matches(it) }
         if (ids.isEmpty()) return
         // Persist the page before handing off to another service.
-        Database.downloadDao().insertPendingAudio(ids.distinct().map(::PendingAudioDownload))
+        val dao = Database.downloadDao()
+        Database.withTransaction {
+            dao.insertPendingAudio(ids.distinct().map { PendingAudioDownload(it) })
+            streams.forEach { stream ->
+                stream.url?.toID()?.let { dao.namePendingAudio(it, stream.title.orEmpty()) }
+            }
+        }
         DownloadHelper.downloadAudioBatch(this, ids)
         amountOfVideosDone += ids.size
         nManager.notify(NotificationId.ENQUEUE_PLAYLIST_DOWNLOAD.id, buildNotification())

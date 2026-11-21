@@ -51,6 +51,7 @@ class PlaylistBookmarkAdapter: ListAdapter<PlaylistBookmark, PlaylistBookmarkVie
 
         with(holder.binding) {
             var isBookmarked = true
+            bookmarkPlaylist.setImageResource(R.drawable.ic_bookmark)
 
             playlistTitle.text = bookmark.playlistName
             playlistDescription.text = bookmark.uploader

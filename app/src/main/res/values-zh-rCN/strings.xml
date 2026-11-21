@@ -582,4 +582,20 @@
     <string name="next_audio_track">下一首</string>
     <string name="loading_audio_track">正在加载 %1$s</string>
     <string name="download_start_unavailable">Android 未能启动下载，请回到 Libreplayer 再试。</string>
+    <string name="backup_metadata">媒体库数据和下载索引</string>
+    <string name="backup_with_audio">媒体库数据及已下载音频（ZIP）</string>
+    <string name="download_tasks">下载任务</string>
+    <string name="download_pending">等待、暂停或处理中</string>
+    <string name="cancel_download_task">取消任务</string>
+    <string name="download_task_cancelled">任务已取消或暂停</string>
+    <string name="download_retry_failed">多次重试后下载中断，请检查网络后恢复下载。</string>
+    <string name="audio_local_missing">本地音频缺失或无法读取</string>
+    <string name="audio_network_failed">无法加载在线音频，请检查网络或资源是否可用。</string>
+    <string name="audio_skipping_failed">已跳过当前队列中无法播放的曲目</string>
+    <string name="audio_resolving">正在连接 · %1$s</string>
+    <string name="audio_reading_local">正在读取本地音频 · %1$s</string>
+    <string name="audio_buffering">正在缓冲 · %1$s</string>
+    <string name="library_pins">管理置顶</string>
+    <string name="download_rescan">重新扫描播单</string>
+<string name="library_search">按名称搜索</string>
 </resources>

@@ -196,11 +196,19 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
                 if (automaticTransition && id != null) {
                     failedAutomaticTracks.add(id)
                     if (automaticCandidates().isNotEmpty()) {
+                        toastFromMainThread(R.string.audio_skipping_failed)
                         playAdjacent(automatic = true)
                         return
                     }
                 }
-                toastFromMainThread(R.string.audio_stream_unavailable)
+                val message = when (error.errorCode) {
+                    PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND -> R.string.audio_local_missing
+                    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+                    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> R.string.audio_network_failed
+                    else -> R.string.audio_stream_unavailable
+                }
+                setPlaylistMetadata(errorMessage = getString(message))
+                toastFromMainThread(message)
                 checkpoint()
             }
         })
@@ -313,7 +321,14 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
             !player.isPlaying || player.duration <= 0 || player.duration - player.currentPosition > 25_000
         ) return
 
-        val task = scope.async { resolveAudio(id) }
+        val task = scope.async {
+            val first = resolveAudio(id)
+            if (first != null || localOnly || !NetworkHelper.isNetworkAvailable(this@AudioPlaybackService)) first
+            else {
+                delay(1500)
+                resolveAudio(id)
+            }
+        }
         val preparation = NextPreparation(id, task)
         nextPreparation = preparation
         scope.launch {
@@ -392,6 +407,7 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
                         if (automatic) failedAutomaticTracks.add(id)
                         continue
                     }
+                    if (index > 0) toastFromMainThread(R.string.audio_skipping_failed)
                     val position = explicitPosition ?: if (!automatic && PlayerHelper.watchPositionsAudio) {
                         withContext(Dispatchers.IO) { DatabaseHelper.getWatchPosition(id) }
                             ?.takeUnless { DatabaseHelper.isVideoWatched(it, audio.track.duration) } ?: 0L
@@ -408,15 +424,23 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
                     checkpoint()
                     return@launch
                 }
-                toastFromMainThread(if (localOnly || !NetworkHelper.isNetworkAvailable(this@AudioPlaybackService))
-                    R.string.audio_not_downloaded else R.string.audio_stream_unavailable)
+                val message = if (localOnly || !NetworkHelper.isNetworkAvailable(this@AudioPlaybackService))
+                    R.string.audio_not_downloaded else R.string.audio_network_failed
+                setPlaylistMetadata(errorMessage = getString(message))
+                toastFromMainThread(message)
                 if (!automatic && shouldResumeOnFailure && player.playbackState != Player.STATE_ENDED) player.play()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Unable to start audio", e)
+                setPlaylistMetadata(errorMessage = getString(R.string.audio_stream_unavailable))
+                toastFromMainThread(R.string.audio_stream_unavailable)
             } finally {
                 next?.task?.cancel()
                 if (generation == sourceGeneration && switchingSource) {
                     switchingSource = false
                     waitingForSoundSince = 0
-                    setPlaylistMetadata()
+                    if (player.playlistMetadata.title != null) setPlaylistMetadata()
                 }
             }
         }
@@ -432,10 +456,10 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
         }
     }
 
-    private fun setPlaylistMetadata(loadingTitle: String? = null) {
+    private fun setPlaylistMetadata(loadingTitle: String? = null, errorMessage: String? = null) {
         player.playlistMetadata = MediaMetadata.Builder()
             .setTitle(loadingTitle)
-            .setExtras(bundleOf(IntentData.videoId to currentId))
+            .setExtras(bundleOf(IntentData.videoId to currentId, "audio_error" to errorMessage))
             .build()
     }
 

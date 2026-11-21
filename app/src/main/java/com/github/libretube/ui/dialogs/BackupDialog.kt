@@ -8,10 +8,12 @@ import androidx.core.os.bundleOf
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.setFragmentResult
 import androidx.lifecycle.lifecycleScope
+import androidx.room.withTransaction
 import com.github.libretube.R
 import com.github.libretube.constants.IntentData
 import com.github.libretube.db.DatabaseHolder.Database
 import com.github.libretube.helpers.PreferenceHelper
+import com.github.libretube.extensions.toastFromMainDispatcher
 import com.github.libretube.obj.BackupFile
 import com.github.libretube.obj.PipedImportPlaylist
 import com.github.libretube.obj.PreferenceItem
@@ -50,6 +52,26 @@ class BackupDialog : DialogFragment() {
 
         data object PlaylistBookmarks : BackupOption(R.string.bookmarks, onSelected = {
             it.playlistBookmarks = Database.playlistBookmarkDao().getAll()
+            val existing = Database.playlistBookmarkDao().getSnapshots().associateBy { snapshot -> snapshot.playlistId }
+            it.bookmarkSnapshots = it.playlistBookmarks.orEmpty().mapNotNull { bookmark ->
+                existing[bookmark.playlistId] ?: com.github.libretube.api.PlaylistsHelper
+                    .getCachedPlaylist(bookmark.playlistId)?.let { playlist ->
+                        com.github.libretube.db.obj.BookmarkSnapshot(bookmark.playlistId,
+                            Json.encodeToString(playlist), false, playlist.relatedStreams.size)
+                    }
+            }
+        })
+
+        data object Downloads : BackupOption(R.string.downloads, onSelected = {
+            it.pendingAudio = Database.downloadDao().getPendingAudio()
+            it.pendingPlaylists = Database.downloadDao().getPendingPlaylists()
+            it.downloads = Database.downloadDao().getAll().mapNotNull { download ->
+                val audio = download.audioItem ?: return@mapNotNull null
+                com.github.libretube.obj.OfflineDownloadBackup(
+                    download.download.toStreamItem(), audio.path.fileName.toString(),
+                    if (audio.isFinished) audio.downloadSize else -1, audio.format, audio.quality
+                )
+            }
         })
 
         data object LocalPlaylists : BackupOption(R.string.local_playlists, onSelected = {
@@ -88,6 +110,7 @@ class BackupDialog : DialogFragment() {
             BackupOption.LocalSubscriptions,
             BackupOption.CustomInstances,
             BackupOption.PlaylistBookmarks,
+            BackupOption.Downloads,
             BackupOption.LocalPlaylists,
             BackupOption.SubscriptionGroups,
             BackupOption.Preferences
@@ -107,22 +130,32 @@ class BackupDialog : DialogFragment() {
             .show()
             .apply {
                 getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+                    val appContext = requireContext().applicationContext
                     requireDialog().hide()
 
                     lifecycleScope.launch(Dispatchers.IO) {
-                        val backupFile = BackupFile()
+                        try {
+                            val backupFile = BackupFile()
 
-                        backupOptions.forEachIndexed { index, option ->
-                            if (selected[index]) option.onSelected(backupFile)
+                            Database.withTransaction {
+                                backupOptions.forEachIndexed { index, option ->
+                                    if (selected[index]) option.onSelected(backupFile)
+                                }
+                            }
+
+                            val file = java.io.File.createTempFile("backup-", ".json", appContext.cacheDir)
+                            file.writeText(Json.encodeToString(backupFile))
+                            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                                setFragmentResult(BACKUP_DIALOG_REQUEST_KEY,
+                                    bundleOf(IntentData.backupFile to file.name))
+                                dismiss()
+                            }
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            appContext.toastFromMainDispatcher(R.string.backup_creation_failed)
+                            kotlinx.coroutines.withContext(Dispatchers.Main) { dismissAllowingStateLoss() }
                         }
-
-                        val encodedBackupFile = Json.encodeToString(backupFile)
-                        setFragmentResult(
-                            BACKUP_DIALOG_REQUEST_KEY,
-                            bundleOf(IntentData.backupFile to encodedBackupFile)
-                        )
-
-                        dialog?.dismiss()
                     }
                 }
             }
