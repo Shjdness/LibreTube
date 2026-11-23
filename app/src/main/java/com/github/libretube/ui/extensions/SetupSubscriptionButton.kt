@@ -4,9 +4,7 @@ import android.widget.TextView
 import androidx.core.view.isVisible
 import com.github.libretube.R
 import com.github.libretube.api.SubscriptionHelper
-import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.extensions.toastFromMainDispatcher
-import com.github.libretube.helpers.PreferenceHelper
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.CoroutineScope
@@ -26,8 +24,6 @@ fun TextView.setupSubscriptionButton(
 ) {
     if (channelId == null) return
 
-    val notificationsEnabled = PreferenceHelper
-        .getBoolean(PreferenceKeys.NOTIFICATION_ENABLED, true)
     var subscribed = false
 
     fun updateUIStateAndNotifyObservers() {
@@ -37,7 +33,7 @@ fun TextView.setupSubscriptionButton(
             if (subscribed) context.getString(R.string.unsubscribe)
             else context.getString(R.string.subscribe)
 
-        notificationBell?.isVisible = subscribed && notificationsEnabled
+        notificationBell?.isVisible = false
         this@setupSubscriptionButton.isVisible = true
     }
 
@@ -49,7 +45,6 @@ fun TextView.setupSubscriptionButton(
         }
     }
 
-    notificationBell?.setupNotificationBell(channelId)
 
     val setSubscriptionState : (Boolean) -> Unit = { subscribe ->
         CoroutineScope(Dispatchers.IO).launch {

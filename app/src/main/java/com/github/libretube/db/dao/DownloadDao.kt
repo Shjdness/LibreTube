@@ -21,6 +21,9 @@ import com.github.libretube.db.obj.PendingPlaylistDownload
 
 @Dao
 interface DownloadDao {
+    @Query("SELECT path FROM downloadItem")
+    suspend fun getDownloadPaths(): List<String>
+
     @Query("SELECT * FROM PendingAudioDownload ORDER BY rowid")
     fun observePendingAudio(): Flow<List<PendingAudioDownload>>
 

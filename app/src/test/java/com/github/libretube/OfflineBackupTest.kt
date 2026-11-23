@@ -17,6 +17,31 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Test
 
 class OfflineBackupTest {
+    @Test(expected = java.io.IOException::class)
+    fun rejectsArchiveBeforeExtractingWhenStorageIsInsufficient() {
+        val temp = Files.createTempDirectory("backup-space-test").toFile()
+        try {
+            OfflineBackupHelper.read(ByteArrayInputStream(archive("audio/$id")), temp) { 2L }
+        } finally { temp.deleteRecursively() }
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun limitsPlainJsonManifestSize() {
+        val temp = Files.createTempDirectory("backup-json-test").toFile()
+        val input = object : java.io.InputStream() {
+            private var remaining = 32 * 1024 * 1024 + 1
+            override fun read(): Int = if (remaining-- > 0) 32 else -1
+            override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                if (remaining <= 0) return -1
+                val count = minOf(length, remaining)
+                java.util.Arrays.fill(buffer, offset, offset + count, 32.toByte())
+                remaining -= count
+                return count
+            }
+        }
+        try { OfflineBackupHelper.read(input, temp) }
+        finally { temp.deleteRecursively() }
+    }
     private val id = "QAoffline01"
     private fun archive(entryName: String, expectedSize: Long = 4): ByteArray {
         val backup = BackupFile(downloads = listOf(OfflineDownloadBackup(

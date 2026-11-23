@@ -32,12 +32,6 @@
         app:title="@string/playerAudioQuality" />
 
     <Preference
-        android:icon="@drawable/ic_notification"
-        android:summary="@string/notify_new_streams"
-        app:key="notifications"
-        app:title="@string/notifications" />
-
-    <Preference
         android:icon="@drawable/ic_backup"
         app:key="backup_restore"
         app:summary="@string/backup_restore_summary"

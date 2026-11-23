@@ -30,7 +30,6 @@ class MainSettings : BasePreferenceFragment() {
             "appearance" to R.id.action_global_appearanceSettings,
             "player" to R.id.action_global_playerSettings,
             "audio_video" to R.id.action_global_audioVideoSettings,
-            "notifications" to R.id.action_global_notificationSettings,
             "backup_restore" to R.id.action_global_backupRestoreSettings
         ).forEach { (preferenceKey, actionId) ->
             findPreference<Preference>(preferenceKey)?.setOnPreferenceClickListener { _ ->

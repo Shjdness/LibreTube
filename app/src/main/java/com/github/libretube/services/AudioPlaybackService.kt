@@ -78,6 +78,8 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
     private var session: MediaLibrarySession? = null
     private var sourceJob: Job? = null
     private var checkpointJob: Job? = null
+    private var sleepTimerJob: Job? = null
+    private var sleepOriginalVolume = 1f
     private var currentId: String? = null
     private var localOnly = false
     private var queueName: String? = null
@@ -215,6 +217,10 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
         session = MediaLibrarySession.Builder(this, QueuePlayer(player), this)
             .setId("libreplayer-audio")
             .build()
+        val sleepPreferences = getSharedPreferences("libreplayer_sleep", MODE_PRIVATE)
+        val remaining = sleepPreferences.getLong("deadline", 0) - System.currentTimeMillis()
+        if (remaining > 0) startSleepTimer(remaining, sleepPreferences.getFloat("volume", player.volume))
+        else sleepPreferences.edit().clear().apply()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = session
@@ -259,6 +265,11 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
             }
             stopServiceCommand -> stopPlayback()
             runPlayerActionCommand -> when {
+                args.containsKey(SLEEP_TIMER_MINUTES) -> {
+                    val minutes = args.getLong(SLEEP_TIMER_MINUTES)
+                    if (minutes !in 0..1440) return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_BAD_VALUE))
+                    if (minutes == 0L) cancelSleepTimer() else startSleepTimer(minutes * 60_000)
+                }
                 args.containsKey(PlayerCommand.SKIP_SILENCE.name) ->
                     player.skipSilenceEnabled = args.getBoolean(PlayerCommand.SKIP_SILENCE.name)
                 args.containsKey(PlayerCommand.SET_AUDIO_ROLE_FLAGS.name) -> trackSelector.updateParameters {
@@ -488,7 +499,47 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
         if (PlayerHelper.watchPositionsAudio) PlayerHelper.saveWatchPosition(player, id)
     }
 
+    private fun startSleepTimer(durationMillis: Long, volume: Float? = null) {
+        cancelSleepTimer()
+        sleepOriginalVolume = volume ?: player.volume
+        sleepDeadlineElapsed = SystemClock.elapsedRealtime() + durationMillis
+        getSharedPreferences("libreplayer_sleep", MODE_PRIVATE).edit()
+            .putLong("deadline", System.currentTimeMillis() + durationMillis)
+            .putFloat("volume", sleepOriginalVolume).apply()
+        sleepTimerJob = scope.launch {
+            while (isActive) {
+                val remaining = sleepDeadlineElapsed - SystemClock.elapsedRealtime()
+                if (remaining <= 0) {
+                    sourceGeneration++
+                    sourceJob?.cancel()
+                    switchingSource = false
+                    waitingForSoundSince = 0
+                    clearNextPreparation()
+                    player.pause()
+                    setPlaylistMetadata()
+                    checkpoint()
+                    cancelSleepTimer()
+                    return@launch
+                }
+                if (remaining <= 10_000) {
+                    val fraction = remaining / 10_000f
+                    player.volume = sleepOriginalVolume * fraction * fraction
+                }
+                delay(minOf(500L, remaining))
+            }
+        }
+    }
+
+    private fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        if (sleepTimerJob != null) player.volume = sleepOriginalVolume
+        sleepTimerJob = null
+        sleepDeadlineElapsed = 0
+        getSharedPreferences("libreplayer_sleep", MODE_PRIVATE).edit().clear().apply()
+    }
+
     private fun stopPlayback() {
+        cancelSleepTimer()
         explicitlyStopped = true
         waitingForSoundSince = 0
         sourceJob?.cancel()
@@ -524,6 +575,8 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
 
     override fun onDestroy() {
         checkpoint()
+        sleepTimerJob?.cancel()
+        sleepDeadlineElapsed = 0
         scope.cancel()
         session?.release()
         session = null
@@ -584,6 +637,9 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
         MediaItem.Builder().setMediaId(videoId).setUri(uri).setMimeType(mimeType).setMetadata(streams, videoId).build()
 
     companion object {
+        const val SLEEP_TIMER_MINUTES = "sleep_timer_minutes"
+        @Volatile var sleepDeadlineElapsed = 0L
+            private set
         private const val TAG = "AudioPlaybackService"
         private val VIDEO_ID = Regex("[A-Za-z0-9_-]{11}")
         @Volatile var active = false

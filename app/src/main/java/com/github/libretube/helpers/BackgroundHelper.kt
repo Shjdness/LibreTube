@@ -29,11 +29,4 @@ object BackgroundHelper {
         }, ContextCompat.getMainExecutor(appContext))
     }
 
-    fun setVolume(context: Context, volume: Float) {
-        if (!AudioPlaybackService.active) return
-        connect(context) { controller ->
-            controller.volume = volume.coerceIn(0f, 1f)
-            controller.release()
-        }
-    }
 }

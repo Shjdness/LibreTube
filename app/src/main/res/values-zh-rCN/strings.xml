@@ -598,4 +598,5 @@
     <string name="library_pins">管理置顶</string>
     <string name="download_rescan">重新扫描播单</string>
 <string name="library_search">按名称搜索</string>
+    <string name="restore_failed">恢复失败</string>
 </resources>

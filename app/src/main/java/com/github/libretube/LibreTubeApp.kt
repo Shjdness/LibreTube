@@ -3,10 +3,15 @@ package com.github.libretube
 import android.app.Application
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.WorkManager
 import com.github.libretube.helpers.ImageHelper
 import com.github.libretube.helpers.NewPipeExtractorInstance
-import com.github.libretube.helpers.NotificationHelper
+import com.github.libretube.helpers.BackupHelper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import android.util.Log
 import com.github.libretube.helpers.PreferenceHelper
 import com.github.libretube.helpers.ShortcutHelper
 import com.github.libretube.util.ExceptionHandler
@@ -35,10 +40,14 @@ class LibreTubeApp : Application() {
         /**
          * Initialize the notification listener in the background
          */
-        NotificationHelper.enqueueWork(
-            context = this,
-            existingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.KEEP
-        )
+        WorkManager.getInstance(this).cancelUniqueWork("NotificationService")
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                BackupHelper.cleanupInterruptedRestores(this@LibreTubeApp)
+            } catch (e: Exception) {
+                Log.w("Libreplayer", "Could not clean interrupted restore files", e)
+            }
+        }
 
         /**
          * Handler for uncaught exceptions
@@ -80,20 +89,12 @@ class LibreTubeApp : Application() {
             .setName(getString(R.string.player_channel_name))
             .setDescription(getString(R.string.player_channel_description))
             .build()
-        val pushChannel = NotificationChannelCompat.Builder(
-            PUSH_CHANNEL_NAME,
-            NotificationManagerCompat.IMPORTANCE_DEFAULT
-        )
-            .setName(getString(R.string.push_channel_name))
-            .setDescription(getString(R.string.push_channel_description))
-            .build()
-
         val notificationManager = NotificationManagerCompat.from(this)
+        notificationManager.deleteNotificationChannel("notification_worker")
         notificationManager.createNotificationChannelsCompat(
             listOf(
                 downloadChannel,
                 playlistDownloadEnqueueChannel,
-                pushChannel,
                 playerChannel
             )
         )
@@ -105,6 +106,5 @@ class LibreTubeApp : Application() {
         const val DOWNLOAD_CHANNEL_NAME = "download_service"
         const val PLAYLIST_DOWNLOAD_ENQUEUE_CHANNEL_NAME = "playlist_download_enqueue"
         const val PLAYER_CHANNEL_NAME = "player_mode"
-        const val PUSH_CHANNEL_NAME = "notification_worker"
     }
 }

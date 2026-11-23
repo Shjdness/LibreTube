@@ -53,7 +53,7 @@ class BackupRestoreSettings : BasePreferenceFragment() {
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    appContext.toastFromMainDispatcher(appContext.getString(R.string.backup_creation_failed) + " · " + e.localizedMessage.orEmpty())
+                    appContext.toastFromMainDispatcher(appContext.getString(R.string.restore_failed) + " · " + e.localizedMessage.orEmpty())
                 }
             }
         }

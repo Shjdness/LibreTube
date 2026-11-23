@@ -7,9 +7,11 @@ import androidx.room.withTransaction
 import java.io.File
 import java.nio.file.Files
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import androidx.core.content.edit
 import androidx.preference.PreferenceManager
-import androidx.work.ExistingPeriodicWorkPolicy
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import com.github.libretube.R
 import com.github.libretube.api.JsonHelper
 import com.github.libretube.constants.PreferenceKeys
@@ -32,6 +34,7 @@ import kotlinx.serialization.json.longOrNull
  * Backup and restore the preferences
  */
 object BackupHelper {
+    private val restoreMutex = Mutex()
     /**
      * Write a [BackupFile] containing the database content as well as the preferences
      */
@@ -55,70 +58,94 @@ object BackupHelper {
      */
     @OptIn(ExperimentalSerializationApi::class)
     suspend fun restoreAdvancedBackup(context: Context, uri: Uri) = withContext(Dispatchers.IO) {
-        val staging = Files.createTempDirectory(context.cacheDir.toPath(), "restore-").toFile()
-        val created = mutableListOf<File>()
-        var committed = false
-        try {
-            val backupFile = requireNotNull(context.contentResolver.openInputStream(uri)).use {
-                OfflineBackupHelper.read(it, staging)
-            }
-            val playlistIds = mutableMapOf<String, String>()
-            Database.withTransaction {
+        restoreMutex.withLock {
+            cleanupInterruptedRestoresLocked(context)
+            val staging = Files.createTempDirectory(DownloadHelper.getDownloadDir(context, DownloadHelper.AUDIO_DIR), "restore-").toFile()
+            File(staging, ".libreplayer-restore").createNewFile()
+            try {
+                val backupFile = requireNotNull(context.contentResolver.openInputStream(uri)).use {
+                    OfflineBackupHelper.read(it, staging)
+                }
+                val playlistIds = mutableMapOf<String, String>()
+                Database.withTransaction {
 
-                Database.watchHistoryDao().insertAll(backupFile.watchHistory.orEmpty())
-                Database.searchHistoryDao().insertAll(backupFile.searchHistory.orEmpty())
-                Database.watchPositionDao().insertAll(backupFile.watchPositions.orEmpty())
-                Database.localSubscriptionDao().insertAll(backupFile.subscriptions.orEmpty())
-                Database.customInstanceDao().insertAll(backupFile.customInstances.orEmpty())
-                Database.playlistBookmarkDao().insertAll(backupFile.playlistBookmarks.orEmpty())
-                Database.subscriptionGroupsDao().insertAll(backupFile.groups.orEmpty())
-                backupFile.bookmarkSnapshots.orEmpty().forEach {
-                    if (Database.playlistBookmarkDao().includes(it.playlistId)) {
-                        val existing = Database.playlistBookmarkDao().getSnapshot(it.playlistId)
-                        if (existing == null || (!existing.complete && it.trackCount >= existing.trackCount)) {
-                            Database.playlistBookmarkDao().upsertSnapshot(it)
+                    Database.watchHistoryDao().insertAll(backupFile.watchHistory.orEmpty())
+                    Database.searchHistoryDao().insertAll(backupFile.searchHistory.orEmpty())
+                    Database.watchPositionDao().insertAll(backupFile.watchPositions.orEmpty())
+                    Database.localSubscriptionDao().insertAll(backupFile.subscriptions.orEmpty())
+                    Database.customInstanceDao().insertAll(backupFile.customInstances.orEmpty())
+                    Database.playlistBookmarkDao().insertAll(backupFile.playlistBookmarks.orEmpty())
+                    Database.subscriptionGroupsDao().insertAll(backupFile.groups.orEmpty())
+                    backupFile.bookmarkSnapshots.orEmpty().forEach {
+                        if (Database.playlistBookmarkDao().includes(it.playlistId)) {
+                            val existing = Database.playlistBookmarkDao().getSnapshot(it.playlistId)
+                            if (existing == null || (!existing.complete && it.trackCount >= existing.trackCount)) {
+                                Database.playlistBookmarkDao().upsertSnapshot(it)
+                            }
                         }
                     }
+
+                    val existingPlaylists = Database.localPlaylistsDao().getAll()
+                    backupFile.localPlaylists?.forEach {
+                        val matching = existingPlaylists.firstOrNull { existing ->
+                            existing.playlist.name == it.playlist.name &&
+                                existing.videos.map { item -> item.videoId } == it.videos.map { item -> item.videoId }
+                        }
+                        if (matching != null) {
+                            playlistIds[it.playlist.id.toString()] = matching.playlist.id.toString()
+                            return@forEach
+                        }
+                        // the playlist will be created with an id of 0, so that Room will auto generate a
+                        // new playlist id to avoid conflicts with existing local playlists
+                        val playlistId = Database.localPlaylistsDao().createPlaylist(it.playlist.copy(id = 0))
+                        playlistIds[it.playlist.id.toString()] = playlistId.toString()
+                        it.videos.forEach { playlistItem ->
+                            playlistItem.playlistId = playlistId.toInt()
+                            Database.localPlaylistsDao().addPlaylistVideo(playlistItem.copy(id = 0))
+                        }
+                    }
+                    Database.downloadDao().insertPendingAudio(backupFile.pendingAudio.orEmpty())
+                    backupFile.pendingPlaylists.orEmpty().forEach {
+                        val id = if (it.playlistType == "PUBLIC") it.playlistId else playlistIds[it.playlistId]
+                        if (id != null) Database.downloadDao().insertPendingPlaylist(it.copy(playlistId = id))
+                    }
+                    OfflineBackupHelper.restoreDownloads(backupFile.downloads.orEmpty(), staging)
                 }
 
-                val existingPlaylists = Database.localPlaylistsDao().getAll()
-                backupFile.localPlaylists?.forEach {
-                    val matching = existingPlaylists.firstOrNull { existing ->
-                        existing.playlist.name == it.playlist.name &&
-                            existing.videos.map { item -> item.videoId } == it.videos.map { item -> item.videoId }
-                    }
-                    if (matching != null) {
-                        playlistIds[it.playlist.id.toString()] = matching.playlist.id.toString()
-                        return@forEach
-                    }
-                    // the playlist will be created with an id of 0, so that Room will auto generate a
-                    // new playlist id to avoid conflicts with existing local playlists
-                    val playlistId = Database.localPlaylistsDao().createPlaylist(it.playlist.copy(id = 0))
-                    playlistIds[it.playlist.id.toString()] = playlistId.toString()
-                    it.videos.forEach { playlistItem ->
-                        playlistItem.playlistId = playlistId.toInt()
-                        Database.localPlaylistsDao().addPlaylistVideo(playlistItem.copy(id = 0))
-                    }
+                val preferences = backupFile.preferences?.map { item ->
+                    if (item.key == "library_pins_0") item.copy(value = kotlinx.serialization.json.JsonPrimitive(
+                        item.value.content.split(',').mapNotNull(playlistIds::get).joinToString(",")
+                    )) else item
                 }
-                Database.downloadDao().insertPendingAudio(backupFile.pendingAudio.orEmpty())
-                backupFile.pendingPlaylists.orEmpty().forEach {
-                    val id = if (it.playlistType == "PUBLIC") it.playlistId else playlistIds[it.playlistId]
-                    if (id != null) Database.downloadDao().insertPendingPlaylist(it.copy(playlistId = id))
-                }
-                OfflineBackupHelper.restoreDownloads(context, backupFile.downloads.orEmpty(), staging, created)
+                restorePreferences(context, preferences)
+            } finally {
+                withContext(NonCancellable) { cleanupInterruptedRestoresLocked(context) }
             }
-            committed = true
+        }
+    }
 
-            val preferences = backupFile.preferences?.map { item ->
-                if (item.key == "library_pins_0") item.copy(value = kotlinx.serialization.json.JsonPrimitive(
-                    item.value.content.split(',').mapNotNull(playlistIds::get).joinToString(",")
-                )) else item
+    suspend fun cleanupInterruptedRestores(context: Context) = restoreMutex.withLock {
+        cleanupInterruptedRestoresLocked(context)
+    }
+
+    private suspend fun cleanupInterruptedRestoresLocked(context: Context) {
+        val root = DownloadHelper.getDownloadDir(context, DownloadHelper.AUDIO_DIR).toFile()
+        val folders = root.listFiles().orEmpty().filter {
+            it.isDirectory && it.name.startsWith("restore-") && File(it, ".libreplayer-restore").isFile
+        }
+        if (folders.isEmpty()) return
+        val referenced = Database.downloadDao().getDownloadPaths()
+            .mapTo(hashSetOf()) { File(it).toPath().toAbsolutePath().normalize().toString() }
+        for (folder in folders) {
+            for (file in folder.listFiles().orEmpty()) {
+                if (file.name.matches(Regex("[A-Za-z0-9_-]{11}")) &&
+                    file.toPath().toAbsolutePath().normalize().toString() !in referenced
+                ) file.delete()
             }
-            restorePreferences(context, preferences)
-        } finally {
-            if (!committed) created.forEach { it.delete() }
-            staging.listFiles()?.forEach { it.delete() }
-            staging.delete()
+            if (folder.listFiles().orEmpty().all { it.name == ".libreplayer-restore" }) {
+                File(folder, ".libreplayer-restore").delete()
+                folder.delete()
+            }
         }
     }
 
@@ -169,7 +196,5 @@ object BackupHelper {
             }
         }
 
-        // re-schedule the notification worker as some settings related to it might have changed
-        NotificationHelper.enqueueWork(context, ExistingPeriodicWorkPolicy.UPDATE)
     }
 }

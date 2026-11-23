@@ -366,7 +366,11 @@ class DownloadService : LifecycleService() {
                 when (val result = downloadProvider.downloadNextChunk(item, sink)) {
                     DownloadProgressResult.DownloadComplete -> {
                         sink.flush()
-                        item.downloadSize = item.path.fileSize()
+                        val actualSize = item.path.fileSize()
+                        if (downloadProvider is RawByteStreamDownloadProvider && item.downloadSize > 0 && actualSize != item.downloadSize) {
+                            throw java.io.IOException("Completed audio size does not match its content length")
+                        }
+                        item.downloadSize = actualSize
                         if (item.downloadSize <= 0L) error("Empty audio download")
                         Database.downloadDao().updateDownloadItem(item)
                         setPauseNotification(notificationBuilder, item, true)

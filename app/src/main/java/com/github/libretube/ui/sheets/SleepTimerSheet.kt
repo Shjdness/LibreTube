@@ -29,7 +29,7 @@ class SleepTimerSheet : ExpandedBottomSheet(R.layout.sleep_timer_sheet) {
         binding.startSleepTimer.setOnClickListener {
             val time = binding.timeInput.text.toString().toLongOrNull()
 
-            if (time == null) {
+            if (time == null || time !in 1..1440) {
                 Toast.makeText(context, R.string.invalid_input, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
@@ -78,6 +78,7 @@ class SleepTimerSheet : ExpandedBottomSheet(R.layout.sleep_timer_sheet) {
     }
 
     private fun updateTimeLeftText() {
+        handler.removeCallbacksAndMessages(null)
         val binding = _binding ?: return
 
         val isTimerRunning = SleepTimer.timeLeftMillis > 0
@@ -88,9 +89,7 @@ class SleepTimerSheet : ExpandedBottomSheet(R.layout.sleep_timer_sheet) {
         binding.quickSelectContainer.isGone = isTimerRunning
         binding.startSleepTimer.isGone = isTimerRunning
 
-        if (!isTimerRunning) return
-
-        binding.timeLeft.text = DateUtils.formatElapsedTime(SleepTimer.timeLeftMillis / 1000)
+        if (isTimerRunning) binding.timeLeft.text = DateUtils.formatElapsedTime(SleepTimer.timeLeftMillis / 1000)
 
         handler.postDelayed(1000) {
             updateTimeLeftText()
@@ -98,6 +97,7 @@ class SleepTimerSheet : ExpandedBottomSheet(R.layout.sleep_timer_sheet) {
     }
 
     override fun onDestroyView() {
+        handler.removeCallbacksAndMessages(null)
         super.onDestroyView()
         _binding = null
     }
