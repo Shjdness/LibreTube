@@ -357,8 +357,6 @@
     <string name="import_subscriptions_from">Importuj subskrypcje z</string>
     <string name="export_subscriptions_to">Eksportuj subskrypcje do</string>
     <string name="mark_as_unwatched">Oznacz jako nieobejrzane</string>
-    <string name="dearrow">Włącz DeArrow</string>
-    <string name="dearrow_summary">Pokaż dokładniejsze i mniej sensacyjne tytuły i miniatury. Wydłuża czas ładowania</string>
     <string name="audio_track_format">%1$s - %2$s</string>
     <string name="unknown_audio_language">Nieznany język ścieżki dźwiękowej</string>
     <string name="color">Kolor</string>
@@ -469,7 +467,6 @@
     <string name="import_temp_playlist">Zaimportować tymczasową playlistę?</string>
     <string name="import_temp_playlist_summary">Czy chcesz utworzyć nową playlistę o nazwie „%1$s”? Playlista będzie zawierać %2$d filmów.</string>
     <string name="title">Tytuł</string>
-    <string name="contribute_to_dearrow">Przyczyń się do DeArrow</string>
     <string name="best_quality">Najwyższy</string>
     <string name="thumbnail_time">Pokaż czas na miniaturze</string>
     <string name="external_download_provider">Zewnętrzny dostawca pobierania</string>

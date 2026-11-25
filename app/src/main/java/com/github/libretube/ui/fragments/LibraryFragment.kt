@@ -6,9 +6,11 @@ import android.view.View
 import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.github.libretube.ui.extensions.bindAudioLibraryControls
 import com.github.libretube.R
 import com.github.libretube.api.PlaylistsHelper
 import com.github.libretube.api.obj.Playlists
@@ -40,6 +42,9 @@ class LibraryFragment : DynamicLayoutManagerFragment(R.layout.fragment_library) 
     private var playlists = emptyList<Playlists>()
     private var bookmarks = emptyList<PlaylistBookmark>()
     private var refreshJob: Job? = null
+    private var groupChannels: Set<String>? = null
+    private var groupPlaylists: Set<String>? = null
+    private var groupBookmarks: Set<String>? = null
     private val scrollStates = arrayOfNulls<Parcelable>(2)
     private val queries = arrayOf("", "")
     private var selectedTab = 0
@@ -117,6 +122,15 @@ class LibraryFragment : DynamicLayoutManagerFragment(R.layout.fragment_library) 
         binding.watchHistory.setOnClickListener {
             findNavController().navigate(R.id.action_libraryFragment_to_watchHistoryFragment)
         }
+        bindAudioLibraryControls(binding.audioControls, onGroup = { groupChannels = it; refresh() })
+        binding.continueListening.setOnClickListener {
+            viewLifecycleOwner.lifecycleScope.launch { com.github.libretube.helpers.NavigationHelper.resumePlayback(requireContext()) }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                com.github.libretube.util.PlaybackStateStore.changes.collect { updateContinueListening() }
+            }
+        }
         showTab()
         refresh()
     }
@@ -157,7 +171,7 @@ class LibraryFragment : DynamicLayoutManagerFragment(R.layout.fragment_library) 
         val query = queries[selectedTab].trim()
         val order = PreferenceHelper.getString(sortKey(), "0")
         if (selectedTab == 0) {
-            val filtered = playlists.filter { it.name.orEmpty().contains(query, ignoreCase = true) }
+            val filtered = playlists.filter { (groupPlaylists == null || it.id in groupPlaylists!!) && it.name.orEmpty().contains(query, ignoreCase = true) }
             val sorted = when (order) {
                 "1" -> filtered.sortedBy { it.name.orEmpty().lowercase() }
                 "2" -> filtered.sortedByDescending { it.name.orEmpty().lowercase() }
@@ -166,7 +180,7 @@ class LibraryFragment : DynamicLayoutManagerFragment(R.layout.fragment_library) 
             val pins = pinnedIds()
             playlistsAdapter.submitList(sorted.sortedByDescending { it.id in pins }) { restoreScroll(0) }
         } else {
-            val filtered = bookmarks.filter { it.playlistName.orEmpty().contains(query, ignoreCase = true) }
+            val filtered = bookmarks.filter { (groupBookmarks == null || it.playlistId in groupBookmarks!!) && it.playlistName.orEmpty().contains(query, ignoreCase = true) }
             val sorted = when (order) {
                 "1" -> filtered.sortedBy { it.playlistName.orEmpty().lowercase() }
                 "2" -> filtered.sortedByDescending { it.playlistName.orEmpty().lowercase() }
@@ -204,6 +218,27 @@ class LibraryFragment : DynamicLayoutManagerFragment(R.layout.fragment_library) 
                 val data = withContext(Dispatchers.IO) {
                     PlaylistsHelper.getPlaylists() to UserDataRepositoryHelper.userDataRepository.getPlaylistBookmarks()
                 }
+                val group = groupChannels
+                val eligible = withContext(Dispatchers.IO) {
+                    if (group == null) null else {
+                        com.github.libretube.repo.AudioLibraryRepository.refreshAuthorIndex()
+                        val db = com.github.libretube.db.DatabaseHolder.Database
+                        val local = db.localPlaylistsDao().getAll().filter { list -> list.videos.any {
+                            com.github.libretube.repo.AudioLibraryRepository.matchesGroup(it.toStreamItem(), group)
+                        }}.mapTo(hashSetOf()) { it.playlist.id.toString() }
+                        val bookmarks = db.playlistBookmarkDao().getSnapshots().filter { snapshot ->
+                            runCatching {
+                                com.github.libretube.api.JsonHelper.json.decodeFromString(
+                                    com.github.libretube.api.obj.Playlist.serializer(), snapshot.playlistJson)
+                                    .relatedStreams.any { com.github.libretube.repo.AudioLibraryRepository.matchesGroup(it, group) }
+                            }.getOrDefault(false)
+                        }.mapTo(hashSetOf()) { it.playlistId }
+                        local to bookmarks
+                    }
+                }
+                groupPlaylists = eligible?.first
+                groupBookmarks = eligible?.second
+                updateContinueListening()
                 playlists = data.first
                 bookmarks = data.second
                 renderLists()
@@ -215,6 +250,14 @@ class LibraryFragment : DynamicLayoutManagerFragment(R.layout.fragment_library) 
                 _binding?.playlistRefresh?.isRefreshing = false
             }
         }
+    }
+
+    private suspend fun updateContinueListening() {
+        val saved = withContext(Dispatchers.IO) { com.github.libretube.util.PlaybackStateStore.load(requireContext()) }
+        val views = _binding ?: return
+        views.continueListening.isVisible = saved != null
+        val title = saved?.tracks?.firstOrNull { it.url?.substringAfterLast('/') == saved.trackId }?.title ?: saved?.queueName
+        views.continueListening.text = getString(R.string.audio_continue_title, title.orEmpty())
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

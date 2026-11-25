@@ -410,14 +410,12 @@
     <string name="also_clear_watch_positions">Notīrīt arī atskaņošanas pozīcijas</string>
     <string name="tooltip_watch_position">Atskaņošanas pozīcija</string>
     <string name="continue_watching">Turpināt skatīties</string>
-    <string name="dearrow">Iespējot DeArrow</string>
     <string name="audio_track_format">%2$s %1$s valodas</string>
     <string name="unknown_audio_language">Nezināma audio valoda</string>
     <string name="unknown_audio_track_type">Nezināms audio celiņa tips</string>
     <string name="local_ryd_summary">Iegūt nepatīk informāciju tieši no https://returnyoutubedislikeapi.com</string>
     <string name="audio_language">Audio valoda</string>
     <string name="repeat_mode_all">Atkārtot visus</string>
-    <string name="dearrow_summary">Rāda daudz precīzākus un mazāk sensacionālus virsrakstus un sīkattēlus. Palielina ielādes laiku</string>
     <string name="download_playlist_note">Lūdzu, atlasiet maksimālo audio/video lejupielādes kvalitāti. Subtitri arī tiks lejupielādēti, ja tie ir pieejami.</string>
     <string name="dubbed_audio_track">ieskaņotais</string>
     <string name="time_in_minutes">Laiks minūtēs</string>
@@ -496,7 +494,6 @@
     <string name="vote_for_segment">Balsot par segmentu</string>
     <string name="start_sleep_timer">Ieslēgt miega taimeri</string>
     <string name="disable_sleep_timer">Izslēgt miega taimeri</string>
-    <string name="contribute_to_dearrow">Dot savu artavu DeArrow</string>
     <string name="external_download_provider">Ārējā lejupielādes lietotne</string>
     <string name="show_upcoming_videos">Rādīt nākamos video</string>
     <string name="mode_of_operation">Darbības režīms</string>

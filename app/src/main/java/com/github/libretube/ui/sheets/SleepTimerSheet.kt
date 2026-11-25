@@ -38,6 +38,11 @@ class SleepTimerSheet : ExpandedBottomSheet(R.layout.sleep_timer_sheet) {
             updateTimeLeftText()
         }
 
+        binding.finishTrack.setOnClickListener {
+            SleepTimer.afterCurrentTrack(requireContext())
+            updateTimeLeftText()
+        }
+
         binding.stopSleepTimer.setOnClickListener {
             SleepTimer.stop(requireContext())
             updateTimeLeftText()
@@ -81,15 +86,17 @@ class SleepTimerSheet : ExpandedBottomSheet(R.layout.sleep_timer_sheet) {
         handler.removeCallbacksAndMessages(null)
         val binding = _binding ?: return
 
-        val isTimerRunning = SleepTimer.timeLeftMillis > 0
+        val finishTrack = com.github.libretube.services.AudioPlaybackService.stopAfterCurrent
+        val isTimerRunning = SleepTimer.timeLeftMillis > 0 || finishTrack
 
         binding.timeLeft.isVisible = isTimerRunning
         binding.stopSleepTimer.isVisible = isTimerRunning
         binding.timeInputLayout.isGone = isTimerRunning
         binding.quickSelectContainer.isGone = isTimerRunning
         binding.startSleepTimer.isGone = isTimerRunning
+        binding.finishTrack.isGone = isTimerRunning
 
-        if (isTimerRunning) binding.timeLeft.text = DateUtils.formatElapsedTime(SleepTimer.timeLeftMillis / 1000)
+        if (isTimerRunning) binding.timeLeft.text = if (finishTrack) getString(R.string.sleep_after_track) else DateUtils.formatElapsedTime(SleepTimer.timeLeftMillis / 1000)
 
         handler.postDelayed(1000) {
             updateTimeLeftText()

@@ -55,6 +55,9 @@
                     android:visibility="gone"
                     tools:text="20:10" />
 
+                <com.google.android.material.button.MaterialButton android:id="@+id/finish_track"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="10dp" android:text="@string/sleep_after_track" />
                 <HorizontalScrollView
                     android:id="@+id/quick_select_container"
                     android:layout_width="match_parent"

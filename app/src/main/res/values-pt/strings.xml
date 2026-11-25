@@ -384,8 +384,6 @@
     <string name="descriptive_audio_track">Descrição de áudio</string>
     <string name="default_or_unknown_audio_track">Padrão</string>
     <string name="unknown_or_no_audio">desconhecido ou sem áudio</string>
-    <string name="dearrow">Ativar \'DeArrow\'</string>
-    <string name="dearrow_summary">Mostrar títulos e miniaturas mais precisas e menos sensacionalistas. Pode aumentar o tempo de carregamento dos vídeos</string>
     <string name="visibility">Visibilidade</string>
     <string name="visibility_public">Público</string>
     <string name="visibility_unlisted">Não listado</string>
@@ -467,7 +465,6 @@
     <string name="albums">Álbuns</string>
     <string name="best_quality">Melhor</string>
     <string name="import_temp_playlist">Importar lista de reprodução temporária?</string>
-    <string name="contribute_to_dearrow">Contribuir para DeArrow</string>
     <string name="title">Título</string>
     <string name="thumbnail_time">Duração da miniatura</string>
     <string name="import_temp_playlist_summary">Deseja criar uma lista de reprodução com o nome %1$s? A lista será constituída por %2$d vídeos.</string>

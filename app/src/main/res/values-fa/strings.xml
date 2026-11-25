@@ -359,7 +359,6 @@
     <string name="export_subscriptions_to">برون‌ریزی اشتراک‌ها به</string>
     <string name="import_playlists_from">درون‌ریزی سیاههٔ پخش از</string>
     <string name="mark_as_unwatched">علامت به تماشا نشده</string>
-    <string name="dearrow">به کار انداختن DeArrow</string>
     <string name="unknown_audio_track_type">گونهٔ قطعهٔ صوتی ناشناخته</string>
     <string name="dubbed_audio_track">دوبله</string>
     <string name="descriptive_audio_track">شرح صوتی</string>
@@ -371,7 +370,6 @@
     <string name="manual">دستی</string>
     <string name="automatic">خودکار</string>
     <string name="continue_watching">ادامه تماشا</string>
-    <string name="dearrow_summary">عنوان‌ها و بندانگشتی‌های دقیق‌تر و کم اغراق آمیز را نشان دهید. زمان بار کردن را افزایش می‌دهد</string>
     <string name="stop">توقف</string>
     <string name="sb_custom_colors_summary">بخش‌های رنگی سفارشی را برای بخش‌های SponsorBlock تغییر می‌دهد</string>
     <string name="color">رنگ</string>
@@ -468,7 +466,6 @@
     <string name="import_temp_playlist">سیاهه پخش موقت وارد شود؟</string>
     <string name="title">عنوان</string>
     <string name="thumbnail_time">زمان تصویر بند‌انگشتی</string>
-    <string name="contribute_to_dearrow">کمک به DeArrow</string>
     <string name="best_quality">بهترین</string>
     <string name="pip">تصویردرتصویر</string>
     <string name="screenshot">نماگرفت</string>

@@ -375,8 +375,6 @@
     <string name="sb_custom_colors_summary">Alterna segmentos de cores personalizadas para segmentos SponsorBlock</string>
     <string name="color">Cor</string>
     <string name="invalid_color">Cor hexadecimal inválido!</string>
-    <string name="dearrow">Habilitar DeArrow</string>
-    <string name="dearrow_summary">Mostrar títulos e miniaturas mais precisos e menos sensacionalistas. Aumenta o tempo de carregamento dos vídeos</string>
     <string name="continue_watching">Continuar assistindo</string>
     <string name="descriptive_audio_track">Audiodescrição</string>
     <string name="default_or_unknown_audio_track">Padrão</string>
@@ -467,7 +465,6 @@
     <string name="albums">Álbuns</string>
     <string name="import_temp_playlist">Importar playlist temporária?</string>
     <string name="import_temp_playlist_summary">Deseja criar uma nova playlist chamada \"%1$s\"? A playlist conterá %2$d vídeos.</string>
-    <string name="contribute_to_dearrow">Contribuir para DeArrow</string>
     <string name="thumbnail_time">Tempo da miniatura</string>
     <string name="title">Título</string>
     <string name="best_quality">Melhor qualidade</string>

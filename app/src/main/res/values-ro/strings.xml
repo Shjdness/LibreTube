@@ -375,14 +375,12 @@
     <string name="manual">Manual</string>
     <string name="playlist_description">Descrierea listei de redare</string>
     <string name="show_search_suggestions">Afișare sugestii de căutare</string>
-    <string name="dearrow">Activează DeArrow</string>
     <string name="unknown_audio_language">Limbă audio necunoscută</string>
     <string name="unknown_audio_track_type">Tip de canal audio necunoscut</string>
     <string name="original_or_main_audio_track">Original</string>
     <string name="dubbed_audio_track">Dublat</string>
     <string name="descriptive_audio_track">Descriere audio</string>
     <string name="continue_watching">Continuă să vizionezi</string>
-    <string name="dearrow_summary">Afișează titluri și miniaturi mai precise și mai puțin senzaționale. Mărește timpul de încărcare</string>
     <string name="audio_track_format">%1$s - %2$s</string>
     <string name="unknown_or_no_audio">necunoscut sau fără sunet</string>
     <string name="default_or_unknown_audio_track">Prestabilit</string>
@@ -470,7 +468,6 @@
     <string name="thumbnail_time">Timp de miniatură</string>
     <string name="import_temp_playlist">Imporți o listă de redare temporară?</string>
     <string name="import_temp_playlist_summary">Dorești să creezi o listă de redare nouă numită „%1$s”? Lista de redare va conține %2$d videoclipuri.</string>
-    <string name="contribute_to_dearrow">Contribuie la DeArrow</string>
     <string name="external_download_provider_summary">Introdu numele pachetului aplicației pe care dorești să o folosești pentru descărcarea videoclipurilor. Lasă câmpul necompletat pentru a folosi programul de descărcare integrat al LibreTube.</string>
     <string name="screenshot">Captură de ecran</string>
     <string name="createNewPlaylist">Creează o listă de redare nouă</string>

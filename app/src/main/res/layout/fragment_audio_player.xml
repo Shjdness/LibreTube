@@ -282,17 +282,15 @@
                     app:icon="@drawable/ic_sleep" />
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/track_options"
-                    style="?materialIconButtonOutlinedStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:contentDescription="@string/track_options"
-                    app:icon="@drawable/ic_three_dots" />
+                    android:id="@+id/time_marks" style="?attr/materialIconButtonOutlinedStyle"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:contentDescription="@string/audio_time_marks" app:icon="@drawable/ic_time" />
 
             </com.google.android.material.button.MaterialButtonGroup>
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/show_more"
+                android:contentDescription="@string/track_options"
                 style="?attr/materialIconButtonFilledStyle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

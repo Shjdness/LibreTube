@@ -6,7 +6,7 @@
     <string name="library">Library</string>
     <string name="yes">Yes</string>
     <string name="search_hint">Search</string>
-    <string name="videos">Videos</string>
+    <string name="videos">Audio</string>
     <string name="subscribe">Subscribe</string>
     <string name="unsubscribe">Unsubscribe</string>
     <string name="share">Share</string>
@@ -62,9 +62,9 @@
     <string name="customization">Adjustments</string>
     <string name="website">Website</string>
     <string name="donate">Donate</string>
-    <string name="uploaderAndVideoCount">%1$s • %2$d videos</string>
-    <string name="subscriberAndVideoCounts">%1$s subscribers • %2$d videos</string>
-    <string name="videoCount">%1$d videos</string>
+    <string name="uploaderAndVideoCount">%1$s • %2$d audio tracks</string>
+    <string name="subscriberAndVideoCounts">%1$s subscribers • %2$d audio tracks</string>
+    <string name="videoCount">%1$d audio tracks</string>
     <string name="noInternet">Connect to the Internet first.</string>
     <string name="retry">Retry</string>
     <string name="comments">Comments</string>
@@ -163,7 +163,7 @@
     <string name="no_video">No video</string>
     <string name="no_subtitle">No subtitle</string>
     <string name="audio">Audio</string>
-    <string name="video">Video</string>
+    <string name="video">Audio</string>
     <string name="downloading">Downloading…</string>
     <string name="download_paused">Download paused</string>
     <string name="download_completed">Download completed</string>
@@ -212,7 +212,7 @@
     <string name="data_saver_mode">Data-saver mode</string>
     <string name="data_saver_mode_summary">Skip thumbnails and other images</string>
     <string name="search_history_summary">Remember searches</string>
-    <string name="watch_history_summary">Keep track of watched videos</string>
+    <string name="watch_history_summary">Keep track of watched audio tracks</string>
     <string name="history_summary">Watch and search history</string>
     <string name="watch_positions_title">Remembered playback positions</string>
     <string name="reset_watch_positions">Reset</string>
@@ -389,9 +389,9 @@
     <string name="ungrouped_channels">Ungrouped</string>
     <string name="ungrouped_channels_with_count">Ungrouped (%1$d)</string>
     <string name="play_automatically">Play automatically</string>
-    <string name="play_automatically_summary">Start playing video automatically when selecting</string>
+    <string name="play_automatically_summary">Start playing audio automatically when selecting</string>
     <string name="fullscreen_gestures">Enter/exit fullscreen gestures</string>
-    <string name="go_to_video">Go to video</string>
+    <string name="go_to_video">Go to audio</string>
     <string name="duration">Duration</string>
     <string name="duration_reversed">Duration (reversed)</string>
     <string name="shorts_notifications">Notifications for shorts</string>
@@ -410,9 +410,6 @@
     <string name="manual">Manual</string>
     <string name="automatic">Automatic</string>
     <string name="automatic_once">Automatic once</string>
-    <string name="dearrow">Enable DeArrow</string>
-    <string name="dearrow_summary">Show more accurate and less sensationalist titles and thumbnails. Increases loading times</string>
-    <string name="contribute_to_dearrow">Contribute to DeArrow</string>
     <string name="title">Title</string>
     <string name="thumbnail_time">Thumbnail time</string>
     <string name="visibility">Visibility</string>
@@ -421,7 +418,7 @@
     <string name="sort_by">Sort by</string>
     <string name="uploader_name">Uploader name</string>
     <string name="duration_span">Duration: %1$s</string>
-    <string name="remove_watched_videos">Remove watched videos</string>
+    <string name="remove_watched_videos">Remove watched audio tracks</string>
     <string name="no_fullscreen_resolution">No-fullscreen resolution</string>
     <string name="same_as_fullscreen">Same as fullscreen</string>
     <string name="segment_submitted">Segment submitted</string>
@@ -432,8 +429,8 @@
     <string name="segment">Segment</string>
     <string name="download_playlist">Download playlist</string>
     <string name="download_playlist_note">Please select the maximum audio/video quality to download. Captions will only be downloaded if available.</string>
-    <string name="enqueue_playlist_description">Shows a notification when enqueueing videos of a playlist to be downloaded.</string>
-    <string name="enqueueing_playlist_download">Enqueueing videos to download of playlist "%1$s"</string>
+    <string name="enqueue_playlist_description">Shows a notification when enqueueing audio tracks of a playlist to be downloaded.</string>
+    <string name="enqueueing_playlist_download">Enqueueing audio tracks to download of playlist "%1$s"</string>
     <string name="audio_language">Audio language</string>
     <string name="default_language">Default</string>
     <string name="external_player">External player</string>
@@ -443,7 +440,7 @@
     <string name="never_show_again">Never show this again</string>
     <string name="update_information">Update information</string>
     <string name="mode_of_operation">Mode of operation</string>
-    <string name="delete_playlist_include_vidoes">Also delete all videos from the playlist?</string>
+    <string name="delete_playlist_include_vidoes">Also delete all audio tracks from the playlist?</string>
     <string name="load_data_from">Load YouTube data from</string>
     <string name="load_data_from_local">Directly from YouTube</string>
     <string name="load_data_from_piped">via Piped (deprecated)</string>
@@ -464,7 +461,7 @@
     <string name="import_format_newpipe" translatable="false">NewPipe</string>
     <string name="import_format_freetube" translatable="false">FreeTube</string>
     <string name="import_format_youtube_csv" translatable="false">YouTube (CSV)</string>
-    <string name="import_format_list_of_urls">List of URLs or video IDs</string>
+    <string name="import_format_list_of_urls">List of URLs or audio IDs</string>
     <string name="home_tab_content">Home tab content</string>
     <string name="show_search_suggestions">Show search suggestions</string>
     <string name="audio_track_format">%1$s - %2$s</string>
@@ -515,7 +512,7 @@
     <string name="dialog_play_offline_title">A local version of this video is available.</string>
     <string name="dialog_play_offline_body">Would you like to play the video from the download folder?</string>
     <string name="view_count">%1$s views</string>
-    <string name="delete_only_watched_videos">Only delete already watched videos</string>
+    <string name="delete_only_watched_videos">Only delete already watched audio tracks</string>
     <string name="local_feed_extraction">Local feed extraction</string>
     <string name="local_feed_extraction_summary">Directly fetch the feed from YouTube. This may be significantly slower.</string>
     <string name="show_upcoming_videos">Show upcoming videos</string>
@@ -539,7 +536,7 @@
     <string name="sync_type_summary_piped">Experts only, deprecated:\nStore playlists and subscriptions data on Piped (%1$s). As Piped doesn\'t have any public instances anymore, you have to be hosting your own Piped instance.</string>
     <string name="switch_sync_type_warning">If you previously used a different sync type, please take a backup of your subscriptions and playlists first. You can then switch the sync type in the instance settings and re-import your data from the backup.</string>
     <string name="oidc_login">Continue with OIDC</string>
-    <string name="already_downloaded">You already downloaded this video!</string>
+    <string name="already_downloaded">You already downloaded this audio!</string>
 
     <!-- Notification channel strings -->
     <string name="download_channel_name">Download Service</string>
@@ -575,7 +572,7 @@
     <string name="tooltip_scroll_to_top">Scroll to top</string>
     <string name="also_clear_watch_positions">Also clear watch positions</string>
     <string name="import_temp_playlist">Import temporary playlist?</string>
-    <string name="import_temp_playlist_summary">Do you want to create a new playlist named \'%1$s\'? The playlist will contain %2$d videos.</string>
+    <string name="import_temp_playlist_summary">Do you want to create a new playlist named \'%1$s\'? The playlist will contain %2$d audio tracks.</string>
     <string name="comment_verified">Verified</string>
     <string name="comment_pinned">Pinned</string>
     <string name="download_channel_count">%1$s (%2$d)</string>
@@ -617,4 +614,26 @@
     <string name="download_rescan">Rescan playlist</string>
 <string name="library_search">Search by name</string>
     <string name="restore_failed">Restore failed</string>
+    <string name="audio_time_marks">Time marks</string>
+    <string name="audio_add_time_mark">Save current position</string>
+    <string name="audio_rename_mark">Rename mark</string>
+    <string name="audio_check_library">Check downloaded audio</string>
+    <string name="audio_check_scope">Checks file existence, size and readable audio samples. This does not verify every audio frame. Active downloads are skipped.</string>
+    <string name="audio_redownload_issues">Download affected audio again</string>
+    <string name="audio_check_result">Checked %1$d · Issues %2$d</string>
+    <string name="audio_check_ok">No issues found in checked files</string>
+    <string name="audio_check_missing">Audio file is missing</string>
+    <string name="audio_check_size">Audio file size does not match</string>
+    <string name="audio_check_incomplete">Audio download is incomplete</string>
+    <string name="audio_check_unreadable">Audio samples could not be read</string>
+    <string name="audio_all_groups">All groups</string>
+    <string name="audio_group_filter">Filter by subscription group</string>
+    <string name="audio_offline_only">Only downloaded</string>
+    <string name="audio_continue_title">Continue listening · %1$s</string>
+    <string name="sleep_after_track">Stop after this track</string>
+    <string name="audio_show_artwork">Show playback artwork</string>
+    <string name="audio_advanced_options">Advanced pitch controls</string>
+    <string name="audio_auto_rewind">Rewind after a pause of at least one minute</string>
+    <string name="audio_auto_rewind_value">Auto rewind: %1$d seconds (0 = off)</string>
+    <string name="audio_continue">Continue listening</string>
 </resources>

@@ -30,7 +30,6 @@ import com.github.libretube.ui.sheets.ChannelOptionsBottomSheet
 import com.github.libretube.ui.sheets.PlaylistOptionsBottomSheet
 import com.github.libretube.ui.sheets.VideoOptionsBottomSheet
 import com.github.libretube.ui.viewholders.SearchViewHolder
-import com.github.libretube.util.DeArrowUtil
 import com.github.libretube.util.TextUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -140,14 +139,7 @@ class SearchResultsAdapter(
                 }
             }
 
-            CoroutineScope(Dispatchers.IO).launch {
-                DeArrowUtil.deArrowVideoId(videoId)?.let { (title, thumbnail) ->
-                    withContext(Dispatchers.Main) {
-                        if (title != null) binding.videoTitle.text = title
-                        if (thumbnail != null) ImageHelper.loadImage(thumbnail, binding.thumbnail)
-                    }
-                }
-            }
+
         }
     }
 

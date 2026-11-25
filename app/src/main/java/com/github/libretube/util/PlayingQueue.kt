@@ -25,15 +25,23 @@ object PlayingQueue {
     private val changes = MutableStateFlow(0L)
     val revision = changes.asStateFlow()
 
-    private fun notifyChanged() = changes.update { it + 1 }
+    private val contentChanges = MutableStateFlow(0L)
+    val contentRevision = contentChanges.asStateFlow()
+
+    private fun notifyChanged(content: Boolean = true) {
+        changes.update { it + 1 }
+        if (content) contentChanges.update { it + 1 }
+    }
 
     // wrapper around PlayerHelper#repeatMode for compatibility
     var repeatMode: Int
         get() = PlayerHelper.repeatMode
         set(value) {
             PlayerHelper.repeatMode = value
-            notifyChanged()
+            notifyChanged(content = false)
         }
+
+    fun cancelNetworkLoads() = clearJobs()
 
     private fun clearJobs() {
         queueJobs.forEach {
@@ -118,7 +126,7 @@ object PlayingQueue {
     fun updateCurrent(streamItem: StreamItem) = synchronized(queue) {
         currentStream = streamItem
 
-        if (!contains(streamItem)) add(streamItem) else notifyChanged()
+        if (!contains(streamItem)) add(streamItem) else notifyChanged(content = false)
     }
 
     fun isNotEmpty() = queue.isNotEmpty()
@@ -206,7 +214,7 @@ object PlayingQueue {
     ) {
         var playlistNextPage = nextPage
         val loadedPages = mutableSetOf<String>()
-        while (playlistNextPage != null && loadedPages.add(playlistNextPage)) {
+        while (!com.github.libretube.repo.AudioLibraryRepository.offlineOnly && playlistNextPage != null && loadedPages.add(playlistNextPage)) {
             MediaServiceRepository.instance.getPlaylistNextPage(playlistId, playlistNextPage).run {
                 addToQueueAsync(relatedStreams, isMainList = isMainList)
                 playlistNextPage = this.nextpage
@@ -225,7 +233,7 @@ object PlayingQueue {
     private suspend fun fetchMoreFromChannel(channelId: String, nextPage: String?) {
         var channelNextPage = nextPage
         var pageIndex = 1
-        while (channelNextPage != null && pageIndex < 10) {
+        while (!com.github.libretube.repo.AudioLibraryRepository.offlineOnly && channelNextPage != null && pageIndex < 10) {
             MediaServiceRepository.instance.getChannelNextPage(channelId, channelNextPage).run {
                 addToQueueAsync(relatedStreams)
                 channelNextPage = this.nextpage
@@ -235,6 +243,7 @@ object PlayingQueue {
     }
 
     private fun insertChannel(channelId: String, newCurrentStream: StreamItem) = runCatchingIO {
+        if (com.github.libretube.repo.AudioLibraryRepository.offlineOnly) return@runCatchingIO
         val channel = MediaServiceRepository.instance.getChannel(ChannelIdentifier.Id(channelId))
         addToQueueAsync(channel.relatedStreams, newCurrentStream)
         if (channel.nextpage == null) return@runCatchingIO

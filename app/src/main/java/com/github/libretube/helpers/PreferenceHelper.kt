@@ -27,10 +27,6 @@ object PreferenceHelper {
      */
     lateinit var settings: SharedPreferences
 
-    /**
-     * Possible chars to use for the DeArrow user ID
-     */
-    private const val USER_ID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
 
     /**
      * Migrations required to migrate the application to a newer preference version.
@@ -293,15 +289,7 @@ object PreferenceHelper {
         }
     }
 
-    fun getDeArrowUserId(): String {
-        var uuid = getString(PreferenceKeys.DEARROW_USER_ID, "")
-        if (uuid.isEmpty()) {
-            // generate a new user id to use for submitting DeArrow edits
-            uuid = (0 until 30).map { USER_ID_CHARS.random() }.joinToString("")
-            putString(PreferenceKeys.DEARROW_USER_ID, uuid)
-        }
-        return uuid
-    }
+
 
     fun getTrendingRegion(context: Context): String {
         val regionPref = PreferenceHelper.getString(PreferenceKeys.REGION, "sys")

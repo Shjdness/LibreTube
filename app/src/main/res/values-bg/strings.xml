@@ -151,7 +151,6 @@
     <string name="subscriberAndVideoCounts">%1$s абонати • %2$d видеоклипове</string>
     <string name="auto_fullscreen_shorts">Автоматично цял екран при кратки видеоклипове</string>
     <string name="reset_message">Нулирай всички настройки и излизане?</string>
-    <string name="dearrow_summary">Покажи по-точни и по-малко сензационни заглавия и миниатюри. Увеличава времето за зареждане</string>
     <string name="default_or_unknown_audio_track">По подразбиране</string>
     <string name="export_subscriptions_to">Изнеси абонаменти към</string>
     <string name="shareTo">Сподели URL към</string>
@@ -288,7 +287,6 @@
     <string name="sponsorblock_user_id">SponsorBlock UserID</string>
     <string name="unlimited_search_history">Неограничена история на търсене</string>
     <string name="captions_size">Размер на надписите</string>
-    <string name="dearrow">Активирай DeArrow</string>
     <string name="export_subscriptions">Изнеси абонаменти</string>
     <string name="local_subscriptions">Локални абонаменти</string>
     <string name="segment_type">Тип сегмент</string>
@@ -466,7 +464,6 @@
     <string name="albums">Албуми</string>
     <string name="import_temp_playlist">Изнеси временен плейлист?</string>
     <string name="import_temp_playlist_summary">Искате ли да създадете нов плейлист с име \'%1$s\'? Плейлистът ще съдържа %2$d видеоклипа.</string>
-    <string name="contribute_to_dearrow">Допринесете за DeArrow</string>
     <string name="title">Заглавие</string>
     <string name="thumbnail_time">Време за миниатюри</string>
     <string name="best_quality">Най-добро</string>

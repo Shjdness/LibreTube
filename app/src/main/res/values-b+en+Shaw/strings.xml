@@ -388,7 +388,6 @@
     <string name="alphabetic_reversed">𐑨𐑤𐑓𐑩𐑚𐑧𐑑𐑦𐑒 (𐑮𐑦𐑝𐑻𐑕𐑑)</string>
     <string name="automatic_once">𐑷𐑑𐑩𐑥𐑨𐑑𐑦𐑒 𐑢𐑳𐑯𐑕</string>
     <string name="title">𐑑𐑲𐑑𐑩𐑤</string>
-    <string name="dearrow_summary">𐑖𐑴 𐑥𐑹 𐑨𐑒𐑘𐑼𐑩𐑑 𐑯 𐑤𐑧𐑕 𐑕𐑦𐑯𐑕𐑱𐑖𐑩𐑯𐑩𐑤𐑦𐑕𐑑 𐑑𐑲𐑑𐑩𐑤𐑟 𐑯 𐑔𐑳𐑥𐑯𐑱𐑤𐑟. 𐑦𐑯𐑒𐑮𐑰𐑕𐑩𐑟 𐑤𐑴𐑛𐑦𐑙 𐑑𐑲𐑥𐑟</string>
     <string name="enqueue_playlist_description">𐑖𐑴𐑟 𐑩 𐑯𐑴𐑑𐑦𐑓𐑦𐑒𐑱𐑖𐑩𐑯 𐑢𐑧𐑯 𐑦𐑯𐑒𐑿𐑦𐑙 𐑝𐑦𐑛𐑦𐑴𐑟 𐑝 𐑩 𐑐𐑤𐑱𐑤𐑦𐑕𐑑 𐑑 𐑚𐑰 𐑛𐑬𐑯𐑤𐑴𐑛𐑩𐑛.</string>
     <string name="contribute_to_sponsorblock">𐑒𐑩𐑯𐑑𐑮𐑦𐑚𐑿𐑑 𐑑 ·𐑕𐑐𐑪𐑯𐑕𐑼𐑚𐑤𐑪𐑒</string>
     <plurals name="channel_new_streams">
@@ -414,8 +413,6 @@
     <string name="off">𐑪𐑓</string>
     <string name="manual">𐑥𐑨𐑯𐑘𐑫𐑩𐑤</string>
     <string name="automatic">𐑷𐑑𐑩𐑥𐑨𐑑𐑦𐑒</string>
-    <string name="dearrow">𐑦𐑯𐑱𐑚𐑩𐑤 ·𐑛𐑰𐑨𐑮𐑴</string>
-    <string name="contribute_to_dearrow">𐑒𐑩𐑯𐑑𐑮𐑦𐑚𐑿𐑑 𐑑 ·𐑛𐑰𐑨𐑮𐑴</string>
     <string name="visibility_unlisted">𐑳𐑯𐑤𐑦𐑕𐑑𐑩𐑛</string>
     <string name="sort_by">𐑕𐑹𐑑 𐑚𐑲</string>
     <string name="upvote">𐑳𐑐</string>

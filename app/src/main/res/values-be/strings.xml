@@ -377,8 +377,6 @@
     <string name="sb_custom_colors_summary">Пераключае карыстальніцкія каляровыя сегменты для сегментаў SponsorBlock</string>
     <string name="off">Выкл</string>
     <string name="continue_watching">Працягнуць прагляд</string>
-    <string name="dearrow">Ўключыць DeArrow</string>
-    <string name="dearrow_summary">Паказвайце больш дакладныя і менш сенсацыйныя назвы і мініяцюры. Павялічвае час загрузкі</string>
     <string name="default_or_unknown_audio_track">Па ўмаўчанні</string>
     <string name="unknown_or_no_audio">невядома або няма гуку</string>
     <string name="stop">Спыніць</string>
@@ -468,7 +466,6 @@
     <string name="albums">Альбомы</string>
     <string name="import_temp_playlist_summary">Хочаце стварыць новы плэйліст пад назвай «%1$s»? Плэйліст будзе змяшчаць %2$d відэа.</string>
     <string name="import_temp_playlist">Імпартаваць часовы плэйліст?</string>
-    <string name="contribute_to_dearrow">Унесці паляпшэнне ў DeArrow</string>
     <string name="title">Загаловак</string>
     <string name="thumbnail_time">Паказваць час на мініяцюры</string>
     <string name="best_quality">Найлепшая</string>

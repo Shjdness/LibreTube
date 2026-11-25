@@ -382,9 +382,6 @@
     <string name="manual">হস্তচালিত</string>
     <string name="automatic">স্বয়ংক্ৰিয়</string>
     <string name="automatic_once">একবাৰ স্বয়ংক্ৰিয়</string>
-    <string name="dearrow">ডিএৰো সক্ৰিয় কৰক</string>
-    <string name="dearrow_summary">অধিক নিৰ্ভুল আৰু কম চাঞ্চল্যকৰ শিৰোনাম আৰু থাম্বনেইল দেখুৱাওক। ল’ডিং সময় বাঢ়ে</string>
-    <string name="contribute_to_dearrow">ডিএৰোত অৰিহণা যোগাওক</string>
     <string name="title">শিৰোনাম</string>
     <string name="thumbnail_time">থাম্বনেইলৰ সময়</string>
     <string name="visibility">দৃশ্যমানতা</string>

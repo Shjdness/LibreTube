@@ -384,7 +384,6 @@
     <string name="playlist_description">Soittolistan kuvaus</string>
     <string name="chapters_videoHighlight">Videon korostus</string>
     <string name="continue_watching">Jatka katselua</string>
-    <string name="dearrow">Ota käyttöön DeArrow</string>
     <string name="sort_by">Järjestä</string>
     <string name="uploader_name">Lataajan nimi</string>
     <string name="duration_span">Kesto: %1$s</string>
@@ -458,7 +457,6 @@
     <string name="rich_caption_rendering">Rikas otteen renderöinti</string>
     <string name="show_updates">Tarkista päivitykset automaattisesti</string>
     <string name="import_temp_playlist">Tuodaanko väliaikainen soittolista?</string>
-    <string name="contribute_to_dearrow">Tue DeArrow\'a</string>
     <string name="external_download_provider">Ulkoinen tallennuspalvelu</string>
     <string name="local_stream_extraction">Paikallinen suoratoiston purku</string>
     <string name="import_watch_history">Tuo katseluhistoria</string>
@@ -514,7 +512,6 @@
     <string name="show_updates_summary">Tarkista päivitykset automaattisesti joka kerta, kun sovellus käynnistetään.</string>
     <string name="dialog_play_offline_body">Haluaisitko toistaa videon tallennuskansiosta?</string>
     <string name="local_feed_extraction_summary">Noudetaan syöte suoraan YouTubesta. Tämä voi olla merkittävästi hitaampaa.</string>
-    <string name="dearrow_summary">Näytä enemmän tarkempia sekä vähemmän sensaatiomaisia otsikoita ja pienoiskuvakkeita. Tämä pidentää latausaikoja</string>
     <string name="enqueue_playlist_description">Näytä ilmoitus, kun lisätään videoita soittolistaan jonoon ladattavaksi.</string>
     <string name="download_playlist_note">Valitse korkein äänen/videon laatu tallennuksille. Tekstitykset tallennetaan vain jos mahdollista.</string>
     <string name="import_temp_playlist_summary">Haluatko luoda uuden soittolistan nimellä \'%1$s\'? Soittolista sisältää %2$d videota.</string>

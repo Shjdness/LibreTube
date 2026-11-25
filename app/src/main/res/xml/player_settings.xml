@@ -3,6 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <PreferenceCategory app:title="@string/behavior">
+        <SwitchPreferenceCompat android:defaultValue="true" app:key="audio_show_artwork" app:title="@string/audio_show_artwork" />
 
         <SwitchPreferenceCompat
             android:defaultValue="true"
@@ -23,12 +24,6 @@
 
     <PreferenceCategory app:title="@string/misc">
 
-        <com.github.libretube.ui.preferences.EditNumberPreference
-            android:icon="@drawable/ic_time"
-            app:defaultValue="50"
-            app:key="buffering_goal"
-            app:summary="@string/buffering_goal_summary"
-            app:title="@string/buffering_goal" />
 
         <SwitchPreferenceCompat
             android:defaultValue="true"

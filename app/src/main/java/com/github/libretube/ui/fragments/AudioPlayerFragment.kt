@@ -43,6 +43,7 @@ import com.github.libretube.helpers.ClipboardHelper
 import com.github.libretube.helpers.ImageHelper
 import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.helpers.NetworkHelper
+import com.github.libretube.helpers.PreferenceHelper
 import com.github.libretube.helpers.PlayerHelper
 import com.github.libretube.helpers.ThemeHelper
 import com.github.libretube.parcelable.PlayerData
@@ -60,7 +61,6 @@ import com.github.libretube.ui.sheets.PlayingQueueSheet
 import com.github.libretube.ui.sheets.SleepTimerSheet
 import com.github.libretube.ui.sheets.VideoOptionsBottomSheet
 import com.github.libretube.util.DataSaverMode
-import com.github.libretube.util.DeArrowUtil
 import kotlinx.coroutines.Job
 import com.github.libretube.util.PlayingQueue
 import kotlinx.coroutines.launch
@@ -86,8 +86,6 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
 
     private var playerController: MediaController? = null
     private var artworkJob: Job? = null
-    private var brandingJob: Job? = null
-    private var brandedTitle: String? = null
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -175,7 +173,9 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
             }
         }
 
-        binding.trackOptions.setOnClickListener { onLongTap() }
+        binding.timeMarks.setOnClickListener {
+            com.github.libretube.ui.dialogs.AudioTimeMarksDialog().show(childFragmentManager, "time_marks")
+        }
         binding.sleepTimer.setOnClickListener {
             SleepTimerSheet().show(childFragmentManager)
         }
@@ -332,8 +332,6 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         val binding = _binding ?: return
 
         artworkJob?.cancel()
-        brandingJob?.cancel()
-        brandedTitle = null
         updateQueueControls()
         updateTrackControls()
 
@@ -346,18 +344,6 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         showArtworkPlaceholder()
         val localAudio = metadata.extras?.getBoolean(IntentData.localAudio) == true
         metadata.artworkUri?.let { updateThumbnailAsync(it, localAudio) }
-        val id = metadata.extras?.getString(IntentData.videoId)
-        if (id != null && !localAudio && metadata.artworkUri?.scheme?.startsWith("http") == true &&
-            NetworkHelper.isNetworkAvailable(requireContext()) && !DataSaverMode.isEnabled(requireContext())
-        ) {
-            brandingJob = viewLifecycleOwner.lifecycleScope.launch {
-                val (title, thumbnail) = DeArrowUtil.deArrowVideoId(id) ?: return@launch
-                if (playerController?.mediaMetadata?.extras?.getString(IntentData.videoId) != id) return@launch
-                brandedTitle = title
-                updateTrackControls()
-                thumbnail?.let { updateThumbnailAsync(Uri.parse(it), localAudio = false) }
-            }
-        }
         initializeSeekBar()
     }
 
@@ -367,14 +353,17 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         binding.thumbnail.setColorFilter(ThemeHelper.getThemeColor(
             requireContext(), androidx.appcompat.R.attr.colorPrimary
         ))
-        binding.thumbnail.isVisible = true
+        val showArt = PreferenceHelper.getBoolean("audio_show_artwork", true)
+        binding.thumbnail.isVisible = showArt
+        binding.miniPlayerThumbnail.isVisible = showArt
         binding.miniPlayerThumbnail.setImageResource(R.drawable.ic_launcher_monochrome)
     }
 
     private fun updateThumbnailAsync(thumbnailUri: Uri, localAudio: Boolean) {
         artworkJob?.cancel()
+        if (!PreferenceHelper.getBoolean("audio_show_artwork", true)) return
         val remote = thumbnailUri.scheme == "http" || thumbnailUri.scheme == "https"
-        if (remote && (localAudio || DataSaverMode.isEnabled(requireContext()) ||
+        if (remote && (com.github.libretube.repo.AudioLibraryRepository.offlineOnly || localAudio || DataSaverMode.isEnabled(requireContext()) ||
                 !NetworkHelper.isNetworkAvailable(requireContext()))
         ) return
 
@@ -418,7 +407,7 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         val loading = !controller.isPlaying &&
             (controller.playlistMetadata.title != null ||
                 (controller.playWhenReady && controller.playbackState == Player.STATE_BUFFERING))
-        val trackTitle = brandedTitle ?: controller.mediaMetadata.title
+        val trackTitle = controller.mediaMetadata.title
         val pendingTitle = controller.playlistMetadata.title ?: trackTitle
         val error = controller.playlistMetadata.extras?.getString("audio_error")
         val title = when {
@@ -522,6 +511,11 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
 
         updatePlayPauseButton()
         initializeSeekBar()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        playerController?.let { updateStreamInfo(it.mediaMetadata) }
     }
 
     override fun onDestroyView() {

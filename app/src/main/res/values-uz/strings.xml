@@ -392,9 +392,6 @@
     <string name="manual">Qo‘l bilan</string>
     <string name="automatic">Avtomatik</string>
     <string name="automatic_once">Bir marta avtomatik</string>
-    <string name="dearrow">DeArrow’ni yoqish</string>
-    <string name="dearrow_summary">Sarlavhalar va miniatyuralarni aniqroq va kam sensatsion tarzda ko‘rsatish. Yuklash vaqtlari oshishi mumkin</string>
-    <string name="contribute_to_dearrow">DeArrow-ga hissa qo‘shish</string>
     <string name="title">Sarlavha</string>
     <string name="thumbnail_time">Muqova vaqti</string>
     <string name="visibility">Ko‘rinish</string>

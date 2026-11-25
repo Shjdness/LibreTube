@@ -11,6 +11,7 @@ fun Player.togglePlayPauseState() {
 
         !isPlaying && playbackState == Player.STATE_ENDED -> {
             seekTo(0)
+            play()
         }
 
         !isPlaying -> play()

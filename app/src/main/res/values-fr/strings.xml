@@ -364,7 +364,6 @@
     <string name="emptyPlaylistDescription">La description de la playlist ne peut pas être vide</string>
     <string name="change_playlist_description">Modifier la description de la playlist</string>
     <string name="group_name_error_exists">Veuillez choisir un nom unique</string>
-    <string name="dearrow_summary">Afficher des titres et des miniatures plus précis et moins sensationnalistes. Augmente les temps de chargement</string>
     <string name="default_or_unknown_audio_track">Par défaut</string>
     <string name="resolution_limited">limité</string>
     <string name="tooltip_close">Fermer</string>
@@ -395,7 +394,6 @@
     <string name="player_channel_description">Affiche une notification lors de la lecture</string>
     <string name="tooltip_scroll_to_top">Défiler vers le haut</string>
     <string name="sponsorblock_user_id">Identifiant SponsorBlock</string>
-    <string name="dearrow">Activer DeArrow</string>
     <string name="segment_type">Type de segment</string>
     <string name="visibility_public">Public</string>
     <string name="original_or_main_audio_track">Original</string>
@@ -464,7 +462,6 @@
     <string name="external_player">Lecteur externe</string>
     <string name="gestures">Gestes</string>
     <string name="show_updates">Vérifier automatiquement les mises à jour</string>
-    <string name="contribute_to_dearrow">Contribuer à DeArrow</string>
     <string name="title">Titre</string>
     <string name="import_temp_playlist">Importer une playlist temporaire ?</string>
     <string name="albums">Albums</string>

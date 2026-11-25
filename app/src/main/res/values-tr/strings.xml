@@ -374,8 +374,6 @@
     <string name="change_playlist_description">Oynatma listesi açıklamasını değiştir</string>
     <string name="screen_orientation">Ekran yönü</string>
     <string name="continue_watching">İzlemeye devam et</string>
-    <string name="dearrow">DeArrow\'u etkinleştir</string>
-    <string name="dearrow_summary">Clickbait\'i engellemek için daha doğru ve daha az etkileyici başlıklar ve küçük resimler gösterir. Yükleme sürelerini artırır</string>
     <string name="sort_by">Şuna göre sırala</string>
     <string name="uploader_name">Yükleyici adı</string>
     <string name="duration_span">Süre: %1$s</string>
@@ -466,7 +464,6 @@
     <string name="albums">Albümler</string>
     <string name="import_temp_playlist">Geçici oynatma listesi içe aktarılsın mı?</string>
     <string name="import_temp_playlist_summary">\'%1$s\' adında yeni bir oynatma listesi oluşturmak istiyor musunuz? Oynatma listesinde %2$d video olacak.</string>
-    <string name="contribute_to_dearrow">DeArrow\'a katkıda bulunun</string>
     <string name="title">Başlık</string>
     <string name="thumbnail_time">Küçük resim zamanı</string>
     <string name="best_quality">En iyi</string>

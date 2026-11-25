@@ -302,8 +302,6 @@
     <string name="automatic">Automatisk</string>
     <string name="automatic_once">Automatisk én gang</string>
     <string name="double_tap_seek">Dobbelttryk for at springe</string>
-    <string name="dearrow">Aktivér DeArrow</string>
-    <string name="dearrow_summary">Vis mere nøjagtige og mindre sensationelle titler og miniaturebilleder. Øger indlæsningstider</string>
     <string name="visibility">Synlighed</string>
     <string name="visibility_public">Offentlig</string>
     <string name="visibility_unlisted">Ikke opført</string>
@@ -465,7 +463,6 @@
     <string name="external_player">Ekstern afspiller</string>
     <string name="comments_count">Kommentarer (%1$s)</string>
     <string name="best_quality">Bedste</string>
-    <string name="contribute_to_dearrow">Bidrag til DeArrow</string>
     <string name="title">Titel</string>
     <string name="import_temp_playlist">Importér midlertidig playliste?</string>
     <string name="import_temp_playlist_summary">Ønsker du at oprette en ny playliste kaldet \'%1$s\'? Playlisten indeholder %2$d videoer.</string>

@@ -20,7 +20,11 @@ data class DownloadWithItems(
     val downloadChapters: List<DownloadChapter> = emptyList()
 ) {
     val audioItem get() = downloadItems.firstOrNull { it.type == FileType.AUDIO }
-    val finishedAudio get() = downloadItems.firstOrNull { it.type == FileType.AUDIO && it.isFinished }
+    @delegate:androidx.room.Ignore
+    private val diskAudio by lazy { downloadItems.firstOrNull { it.type == FileType.AUDIO && it.isFinished } }
+    @androidx.room.Ignore
+    var audioUnavailable = false
+    val finishedAudio get() = if (audioUnavailable) null else diskAudio
     val channelKey get() = download.uploaderUrl?.takeIf { it.isNotBlank() } ?: download.uploader
 
     fun toStreams(): Streams = Streams(

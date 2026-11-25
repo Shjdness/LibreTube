@@ -21,6 +21,22 @@ import com.github.libretube.db.obj.PendingPlaylistDownload
 
 @Dao
 interface DownloadDao {
+    @androidx.room.Upsert
+    suspend fun updateAudioStatus(status: com.github.libretube.db.obj.AudioDownloadStatus)
+
+    @Query("SELECT * FROM AudioDownloadStatus WHERE videoId = :id")
+    suspend fun audioStatus(id: String): com.github.libretube.db.obj.AudioDownloadStatus?
+
+    @Query("SELECT * FROM AudioDownloadStatus")
+    suspend fun audioStatuses(): List<com.github.libretube.db.obj.AudioDownloadStatus>
+
+    @Query("SELECT videoId FROM AudioDownloadStatus WHERE ready = 1")
+    fun observeReadyAudioIds(): Flow<List<String>>
+
+    @Transaction
+    @Query("SELECT * FROM download WHERE videoId NOT IN (SELECT videoId FROM AudioDownloadStatus WHERE ready = 1)")
+    suspend fun getIncompleteAudio(): List<DownloadWithItems>
+
     @Query("SELECT path FROM downloadItem")
     suspend fun getDownloadPaths(): List<String>
 

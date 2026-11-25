@@ -383,8 +383,6 @@
     <string name="dubbed_audio_track">دۆبلاژ</string>
     <string name="default_or_unknown_audio_track">سەرەکی یان نەزانراو</string>
     <string name="unknown_or_no_audio">نەزانراوە یان بێ دەنگە</string>
-    <string name="dearrow">چالاککردنی DeArrow</string>
-    <string name="dearrow_summary">پیشاندانی ناونیشان و وێنەی بچووکی ووردتر و کەمتر هەستیار، کاتەکانی بارکردن زیاد دەکات</string>
     <string name="visibility">دەرکەوتن</string>
     <string name="visibility_public">گشتی</string>
     <string name="visibility_unlisted">دیارینەکراو</string>
@@ -437,7 +435,6 @@
     <string name="segment_submitted">مەودا پێشکەشکرا</string>
     <string name="best_quality">باشترین</string>
     <string name="download_playlist">داگرتنی لیستی لێدان</string>
-    <string name="contribute_to_dearrow">بەشداریکردن لە DeArrow</string>
     <string name="thumbnail_time">کاتی بچوککراوە</string>
     <string name="downvote">کەمکردن</string>
     <string name="title">ناو</string>

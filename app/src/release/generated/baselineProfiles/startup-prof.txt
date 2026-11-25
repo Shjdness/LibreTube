@@ -7317,7 +7317,6 @@ HSPLcom/github/libretube/api/SubscriptionHelper;->getToken()Ljava/lang/String;
 Lcom/github/libretube/api/SubscriptionHelper$getFeed$1;
 HSPLcom/github/libretube/api/SubscriptionHelper$getFeed$1;-><init>(Lcom/github/libretube/api/SubscriptionHelper;Lkotlin/coroutines/Continuation;)V
 HSPLcom/github/libretube/api/SubscriptionHelper$getFeed$1;->invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;
-Lcom/github/libretube/api/obj/DeArrowBody;
 Lcom/github/libretube/api/obj/DeleteUserRequest;
 Lcom/github/libretube/api/obj/EditPlaylistBody;
 Lcom/github/libretube/api/obj/Login;
@@ -8110,14 +8109,6 @@ Lcom/github/libretube/util/DataSaverMode;
 HSPLcom/github/libretube/util/DataSaverMode;-><clinit>()V
 HSPLcom/github/libretube/util/DataSaverMode;-><init>()V
 HSPLcom/github/libretube/util/DataSaverMode;->isEnabled(Landroid/content/Context;)Z
-Lcom/github/libretube/util/DeArrowUtil;
-HSPLcom/github/libretube/util/DeArrowUtil;-><clinit>()V
-HSPLcom/github/libretube/util/DeArrowUtil;-><init>()V
-HSPLcom/github/libretube/util/DeArrowUtil;->deArrowStreamItems(Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-Lcom/github/libretube/util/DeArrowUtil$deArrowStreamItems$1;
-HSPLcom/github/libretube/util/DeArrowUtil$deArrowStreamItems$1;-><init>(Lcom/github/libretube/util/DeArrowUtil;Lkotlin/coroutines/Continuation;)V
-Lcom/github/libretube/util/DeArrowUtilKt;
-HSPLcom/github/libretube/util/DeArrowUtilKt;->deArrowStreamItems(Ljava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 Lcom/github/libretube/util/ExceptionHandler;
 HSPLcom/github/libretube/util/ExceptionHandler;-><clinit>()V
 HSPLcom/github/libretube/util/ExceptionHandler;-><init>(Ljava/lang/Thread$UncaughtExceptionHandler;)V

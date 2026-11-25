@@ -382,8 +382,6 @@
     <string name="dubbed_audio_track">吹き替え</string>
     <string name="descriptive_audio_track">解説</string>
     <string name="continue_watching">続きから再生</string>
-    <string name="dearrow_summary">大げさでなくより正確な題名とサムネイルを表示します。読み込み時間は増加します</string>
-    <string name="dearrow">DeArrow を使用</string>
     <string name="visibility">公開状態</string>
     <string name="visibility_public">公開</string>
     <string name="visibility_unlisted">限定公開</string>
@@ -464,7 +462,6 @@
     <string name="show_updates">最新版を自動で確認</string>
     <string name="albums">アルバム</string>
     <string name="thumbnail_time">サムネイルの時間</string>
-    <string name="contribute_to_dearrow">DeArrow に貢献</string>
     <string name="title">題名</string>
     <string name="import_temp_playlist_summary">次の名前の新しい再生リストを作成しますか？「%1$s」%2$d 本の動画が含まれます。</string>
     <string name="import_temp_playlist">一時的な再生リストをインポートしますか？</string>

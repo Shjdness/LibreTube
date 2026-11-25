@@ -36,6 +36,8 @@ import com.github.libretube.db.obj.WatchPosition
 
 @Database(
     entities = [
+        com.github.libretube.db.obj.AudioTimeMark::class,
+        com.github.libretube.db.obj.AudioDownloadStatus::class,
         WatchHistoryItem::class,
         WatchPosition::class,
         SearchHistoryItem::class,
@@ -56,7 +58,7 @@ import com.github.libretube.db.obj.WatchPosition
         SubscriptionGroup::class,
         SubscriptionsFeedItem::class
     ],
-    version = 29,
+    version = 30,
     autoMigrations = [
         AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9),
@@ -72,10 +74,13 @@ import com.github.libretube.db.obj.WatchPosition
         AutoMigration(from = 26, to = 27),
         AutoMigration(from = 27, to = 28),
         AutoMigration(from = 28, to = 29),
+        AutoMigration(from = 29, to = 30),
     ]
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
+    abstract fun audioTimeMarkDao(): com.github.libretube.db.dao.AudioTimeMarkDao
+
     /**
      * Watch History
      */

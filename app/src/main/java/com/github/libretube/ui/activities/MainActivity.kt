@@ -3,6 +3,7 @@ package com.github.libretube.ui.activities
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Build
+import com.github.libretube.extensions.toID
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -457,9 +458,15 @@ class MainActivity : AbstractPlayerHostActivity() {
                 }
                 return@launch
             }
-            com.github.libretube.util.PlayingQueue.setStreams(saved.tracks)
-            NavigationHelper.navigateVideo(this@MainActivity, PlayerData(saved.trackId, keepQueue = true,
-                isOffline = saved.localOnly, queueName = saved.queueName, resumePositionMs = saved.positionMs,
+            val offline = saved.localOnly || com.github.libretube.repo.AudioLibraryRepository.offlineOnly ||
+                !com.github.libretube.helpers.NetworkHelper.isNetworkAvailable(this@MainActivity)
+            val tracks = if (offline) com.github.libretube.helpers.DownloadHelper.getDownloadedAudioQueue(
+                saved.tracks.mapNotNull { it.url?.toID() }).map { it.download.toStreamItem() } else saved.tracks
+            val id = saved.trackId.takeIf { old -> tracks.any { it.url?.toID() == old } }
+                ?: tracks.firstOrNull()?.url?.toID() ?: return@launch
+            com.github.libretube.util.PlayingQueue.setStreams(tracks)
+            NavigationHelper.navigateVideo(this@MainActivity, PlayerData(id, keepQueue = true,
+                isOffline = offline, queueName = saved.queueName, resumePositionMs = if (id == saved.trackId) saved.positionMs else 0,
                 playlistId = saved.playlistId, playlistNextPage = saved.playlistNextPage, resumePaused = true))
         }
     }

@@ -313,7 +313,6 @@
     <string name="sponsorblock_user_id">ID de usator SponsorBlock</string>
     <string name="unlimited_search_history">Chronologia de recerca ilimitate</string>
     <string name="captions_size">Dimension del subtitulos</string>
-    <string name="dearrow">Activar DeArrow</string>
     <string name="segment_type">Typo de segmento</string>
     <string name="defaultIconLight">Clar predefinite</string>
     <string name="visibility_public">Public</string>
@@ -441,7 +440,6 @@
     <string name="push_channel_name">Worker de notificationes</string>
     <string name="sb_custom_colors_summary">Commuta colores personalisate del segmentos de SponsorBlock</string>
     <string name="copy_tooltip">Copiar</string>
-    <string name="dearrow_summary">Monstrar titulos e miniaturas plus accurate e minus sensationalista. Augmenta le tempore de carga</string>
     <string name="rich_caption_rendering">Rendition de subtitulos inricchite</string>
     <string name="category_preview_summary">Pro segmentos detaliante contentos futur sin information additional. SI illo include clips que solmente appare hic, isto es troppo probabile que sia un categoria erronee</string>
     <string name="rich_caption_rendering_summary">Render subtitulos web pro un experientia plus inricchite e personalisate</string>
@@ -467,7 +465,6 @@
     <string name="import_temp_playlist">Importar lista de reproduction temporari?</string>
     <string name="import_temp_playlist_summary">Desira tu crear un nove lista de reproduction appellate \'%1$s\'? Le lista habera %2$d videos.</string>
     <string name="title">Titulo</string>
-    <string name="contribute_to_dearrow">Contribuer a DeArrow</string>
     <string name="thumbnail_time">Tempore de miniatura</string>
     <string name="best_quality">Melior</string>
     <string name="external_download_provider">Fornitor de discarganentos externe</string>

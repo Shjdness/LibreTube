@@ -45,10 +45,6 @@ object PreferenceKeys {
     const val SHOW_TIME_LEFT = "show_time_left"
     const val REPEAT_MODE = "repeat_mode"
 
-    // DeArrow
-    const val DEARROW_USER_ID = "sb_user_id"
-    const val CONTRIBUTE_TO_DEARROW = "dearrow_contribute_key"
-    const val DEARROW = "dearrow"
 
     // Notifications
     const val NOTIFICATION_ENABLED = "notification_toggle"

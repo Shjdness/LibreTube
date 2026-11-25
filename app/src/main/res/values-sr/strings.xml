@@ -346,7 +346,6 @@
     <string name="music_artists">YT Music извођачи</string>
     <string name="emptyPlaylistDescription">Опис плејлисте не може бити празан</string>
     <string name="group_name_error_exists">Изаберите име које је јединствено</string>
-    <string name="dearrow_summary">Прикажите тачније и мање сензационалистичке наслове и сличице. Повећава време учитавања</string>
     <string name="default_or_unknown_audio_track">подразумевано или непознато</string>
     <string name="export_subscriptions_to">Извоз праћења у</string>
     <string name="resolution_limited">ограничено</string>
@@ -389,7 +388,6 @@
     <string name="tooltip_scroll_to_top">Иди на врх</string>
     <string name="sponsorblock_user_id">SponsorBlock UserID</string>
     <string name="unlimited_search_history">Неограничена историја претраге</string>
-    <string name="dearrow">Омогући DeArrow</string>
     <string name="segment_type">Врста сегмента</string>
     <string name="visibility_public">Јавно</string>
     <string name="original_or_main_audio_track">оригинално или главно</string>
@@ -467,7 +465,6 @@
     <string name="albums">Албуми</string>
     <string name="import_temp_playlist">Увести привремену плејлисту?</string>
     <string name="import_temp_playlist_summary">Желите ли да направите нову плејлисту под називом „%1$s“? Плејлиста ће садржати %2$d видео снимака.</string>
-    <string name="contribute_to_dearrow">Допринос DeArrow-у</string>
     <string name="title">Наслов</string>
     <string name="thumbnail_time">Време сличице</string>
     <string name="best_quality">Најбољи</string>

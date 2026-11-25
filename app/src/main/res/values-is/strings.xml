@@ -78,7 +78,6 @@
     <string name="sleep_timer">Niðurteljari svæfingar</string>
     <string name="alphabetic_reversed">Stafrófsröð (öfug)</string>
     <string name="go_to_video">Fara á myndskeið</string>
-    <string name="dearrow">Virkja DeArrow</string>
     <string name="visibility">Sýnileiki</string>
     <string name="sb_invalid_segment">Ógildur upphafs eða lokatími búts</string>
     <string name="gestures">Bendingar</string>
@@ -242,7 +241,6 @@
     <string name="title">Titill</string>
     <string name="automatic">Sjálfvirkt</string>
     <string name="remove_watched_videos">Fjarlægja áhorfð myndskeið</string>
-    <string name="contribute_to_dearrow">Leggðu DeArrow lið</string>
     <string name="undo">Afturkalla</string>
     <string name="segment">Bútur</string>
     <string name="download_playlist">Sækja spilunarlista</string>
@@ -465,7 +463,6 @@
     <string name="category_highlight_summary">Gæti annað hvort verið auglýstur titill, smámyndin eða áhugaverðasti hluti myndskeiðsins. Þú getur hoppað yfir á þetta með því að pikka á kaflahlutann</string>
     <string name="legacyIcon">Eldra vandfundið</string>
     <string name="fireIcon">Glæstur eldur</string>
-    <string name="dearrow_summary">Sýna nákvæmari og minna áberandi titla og smámyndir. Eykur hleðslutíma</string>
     <string name="rich_caption_rendering">Flókin myndgerð skýringartexta</string>
     <string name="rich_caption_rendering_summary">Myndgera skýringartexta í vefstíl fyrir ríkulegri og sérsníðanlega framsetningu</string>
     <string name="sb_custom_colors_summary">Víxlar sérsniðnum litahlutum af/á fyrir SponsorBlock-hluta</string>

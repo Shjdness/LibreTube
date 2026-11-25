@@ -241,7 +241,6 @@
     <string name="original_or_main_audio_track">Pôvodná</string>
     <string name="unknown_audio_track_type">Neznámy typ zvukovej stopy</string>
     <string name="finished">Dokončené</string>
-    <string name="dearrow">Povoliť DeArrow</string>
     <string name="import_playlists_from">Importovať zoznamy skladieb z</string>
     <string name="export_subscriptions_to">Exportovať odbery do</string>
     <string name="audio_track_format">%1$s - %2$s</string>
@@ -401,7 +400,6 @@
     <string name="uploader_name">Meno autora</string>
     <string name="emptyPlaylistDescription">Popis zoznamu skladieb nemôže byť prázdny</string>
     <string name="automatic">Automaticky</string>
-    <string name="dearrow_summary">Zobrazí presnejšie a menej senzačné názvy a miniatúry. Zvyšuje čas načítania</string>
     <string name="off">Zavrieť</string>
     <string name="manual">Ručne</string>
     <string name="show_search_suggestions">Zobraziť návrhy vyhľadávania</string>
@@ -467,7 +465,6 @@
     <string name="albums">Albumy</string>
     <string name="import_temp_playlist">Importovať dočasný zoznam skladieb?</string>
     <string name="import_temp_playlist_summary">Chcete vytvoriť nový zoznam skladieb s názvom \'%1$s\'? Zoznam skladieb bude obsahovať %2$d videí.</string>
-    <string name="contribute_to_dearrow">Prispieť do DeArrow</string>
     <string name="title">Názov</string>
     <string name="thumbnail_time">Čas miniatúry</string>
     <string name="best_quality">Najlepšia</string>

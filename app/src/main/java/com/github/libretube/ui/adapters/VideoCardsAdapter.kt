@@ -24,7 +24,6 @@ import com.github.libretube.ui.extensions.setFormattedDuration
 import com.github.libretube.ui.extensions.setWatchProgressLength
 import com.github.libretube.ui.sheets.VideoOptionsBottomSheet
 import com.github.libretube.ui.viewholders.VideoCardsViewHolder
-import com.github.libretube.util.DeArrowUtil
 import com.github.libretube.util.TextUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -126,14 +125,7 @@ class VideoCardsAdapter(private val columnWidthDp: Float? = null) :
                 true
             }
 
-            CoroutineScope(Dispatchers.IO).launch {
-                DeArrowUtil.deArrowVideoId(videoId)?.let { (title, thumbnail) ->
-                    withContext(Dispatchers.Main) {
-                        if (title != null) this@apply.textViewTitle.text = title
-                        if (thumbnail != null) ImageHelper.loadImage(thumbnail, this@apply.thumbnail)
-                    }
-                }
-            }
+
         }
     }
 

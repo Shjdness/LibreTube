@@ -339,8 +339,6 @@
     <string name="emptyPlaylistDescription">La descripció de la llista de reproducció no pot estar buida</string>
     <string name="off">Desactivat</string>
     <string name="automatic_once">Automàtic un cop</string>
-    <string name="dearrow">Habilita DeArrow</string>
-    <string name="dearrow_summary">Mostra títols i miniatures més acurats. Augmenta el temps de càrrega</string>
     <string name="visibility">Visibilitat</string>
     <string name="visibility_public">Públic</string>
     <string name="uploader_name">Nom del pujador</string>
@@ -467,7 +465,6 @@
     <string name="best_quality">Millors</string>
     <string name="import_temp_playlist_summary">Voleu crear una nova llista de reproducció anomenada \'%1$s\'? La llista contindrà %2$d vídeos.</string>
     <string name="thumbnail_time">Temps de la miniatura</string>
-    <string name="contribute_to_dearrow">Contribueix a DeArrow</string>
     <string name="show_updates">Comprova si hi ha actualitzacions automàticament</string>
     <string name="title">Títol</string>
     <string name="screenshot">Captura de pantalla</string>

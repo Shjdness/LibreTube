@@ -56,7 +56,7 @@ object NavigationHelper {
         clicked: StreamItem? = null,
         append: Boolean = false,
     ) {
-        val offline = !NetworkHelper.isNetworkAvailable(context)
+        val offline = com.github.libretube.repo.AudioLibraryRepository.offlineOnly || !NetworkHelper.isNetworkAvailable(context)
         val ordered = items.filter { !it.url.isNullOrBlank() }
         val eligible = if (offline) {
             val available = DownloadHelper.getDownloadedAudioQueue(ordered.mapNotNull { it.url?.toID() })
@@ -94,6 +94,41 @@ object NavigationHelper {
         if (reused) return
 
         openAudioPlayerFragment(context, minimizeByDefault = true, initialTrack = playerData)
+    }
+
+    @SuppressLint("UnsafeOptInUsageError")
+    suspend fun resumePlayback(context: Context) {
+        val activity = ContextHelper.unwrapActivity<AbstractPlayerHostActivity>(context)
+        if (com.github.libretube.services.AudioPlaybackService.active) {
+            val reused = activity.runOnAudioPlayerFragment {
+                binding.playerMotionLayout.transitionToStart()
+                true
+            }
+            if (!reused) openAudioPlayerFragment(context)
+            BackgroundHelper.connect(context) { controller ->
+                if (controller.playbackState == androidx.media3.common.Player.STATE_ENDED) controller.seekTo(0)
+                controller.play()
+                controller.release()
+            }
+            return
+        }
+        val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.github.libretube.util.PlaybackStateStore.load(context)
+        } ?: return
+        val offline = saved.localOnly || com.github.libretube.repo.AudioLibraryRepository.offlineOnly ||
+            !NetworkHelper.isNetworkAvailable(context)
+        val tracks = if (offline) DownloadHelper.getDownloadedAudioQueue(saved.tracks.mapNotNull { it.url?.toID() })
+            .map { it.download.toStreamItem() } else saved.tracks
+        val id = saved.trackId.takeIf { old -> tracks.any { it.url?.toID() == old } }
+            ?: tracks.firstOrNull()?.url?.toID()
+        if (id == null) {
+            context.toastFromMainDispatcher(R.string.audio_not_downloaded)
+            return
+        }
+        PlayingQueue.setStreams(tracks)
+        navigateVideo(context, PlayerData(id, keepQueue = true, isOffline = offline, queueName = saved.queueName,
+            playlistId = saved.playlistId, playlistNextPage = saved.playlistNextPage,
+            resumePositionMs = if (id == saved.trackId) saved.positionMs else 0))
     }
 
     fun navigatePlaylist(context: Context, playlistUrlOrId: String?, playlistType: PlaylistType) {

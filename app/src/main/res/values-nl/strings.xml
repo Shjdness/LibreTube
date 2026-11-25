@@ -261,7 +261,6 @@
     <string name="tooltip_filter">Filteren</string>
     <string name="local_playlists">Lokale afspeellijsten</string>
     <string name="continue_watching">Verder­kijken</string>
-    <string name="dearrow">DeArrow inschakelen</string>
     <string name="swipe_controls">Swipe-bediening</string>
     <string name="add_to_queue">Toevoegen aan wachtrij</string>
     <string name="background_mode">Achtergrond­modus</string>
@@ -408,7 +407,6 @@
     <string name="creation_date_reversed">Aanmaak­datum (omgekeerd)</string>
     <string name="remove_watched_videos">Bekeken video\'s verwijderen</string>
     <string name="autoplay_countdown_summary">Een aftelling van 5 seconden tonen voordat de volgende video automatisch wordt afgespeeld</string>
-    <string name="dearrow_summary">Geef meer accurate en minder sensationele titels en miniaturen weer. Verhoogt de laadtijden</string>
     <string name="notification_time_summary">Beperk de tijdspanne waarin streammeldingen worden weergegeven</string>
     <string name="alternative_pip_controls_summary">Toon alleen audio en overslaan in PiP in plaats van vooruit- en terugspoelen</string>
     <string name="play_automatically_summary">Start het afspelen automatisch bij het selecteren van een video</string>
@@ -468,7 +466,6 @@
     <string name="import_temp_playlist_summary">Wilt u een nieuwe afspeel­lĳst maken met de naam ‘%1$s’? Deze bevat %2$d video\'s.</string>
     <string name="thumbnail_time">Miniatuur­tĳd</string>
     <string name="title">Titel</string>
-    <string name="contribute_to_dearrow">Bĳdragen aan DeArrow</string>
     <string name="best_quality">Best</string>
     <string name="external_download_provider">Externe download­provider</string>
     <string name="external_download_provider_summary">Voer de pakket­naam in van de app die u wilt gebruiken voor het downloaden van video\'s. Laat dit veld leeg om de ingebouwde downloader van LibreTube te gebruiken.</string>

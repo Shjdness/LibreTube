@@ -5,7 +5,6 @@ import com.github.libretube.R
 import com.github.libretube.api.obj.Channel
 import com.github.libretube.api.obj.ChannelTabResponse
 import com.github.libretube.api.obj.CommentsPage
-import com.github.libretube.api.obj.DeArrowContent
 import com.github.libretube.api.obj.Playlist
 import com.github.libretube.api.obj.SearchResult
 import com.github.libretube.api.obj.StreamItem
@@ -18,7 +17,6 @@ interface MediaServiceRepository {
     suspend fun getTrending(region: String, category: TrendingCategory): List<StreamItem>
     suspend fun getStreams(videoId: String, includeDislikes: Boolean = true): Streams
     suspend fun getComments(videoId: String): CommentsPage
-    suspend fun getDeArrowContent(videoId: String): DeArrowContent?
     suspend fun getCommentsNextPage(videoId: String, nextPage: String): CommentsPage
     suspend fun getSearchResults(searchQuery: String, filter: String): SearchResult
     suspend fun getSearchResultsNextPage(

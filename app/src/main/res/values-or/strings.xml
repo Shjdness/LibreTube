@@ -374,8 +374,6 @@
     <string name="invalid_color">ଅବୈଧ ରଙ୍ଗ ମୂଲ୍ୟ ପ୍ରବେଶ!</string>
     <string name="chapters_videoHighlight">ଭିଡିଓ ହାଇଲାଇଟ୍</string>
     <string name="stop">ବନ୍ଦ କର</string>
-    <string name="dearrow">DeArrow କୁ ସକ୍ରିୟ କରନ୍ତୁ</string>
-    <string name="dearrow_summary">ଅଧିକ ସଠିକ ଏବଂ କମ୍ ସମ୍ବେଦନଶୀଳତା ବିଶିଷ୍ଟ ଶୀର୍ଷକ ଏବଂ ଅକ୍ଷରଗୁଡ଼ିକୁ ଦର୍ଶାନ୍ତୁ । ଲୋଡିଂ ସମୟ ବଢାଇଥାଏ</string>
     <string name="audio_track_format">%1$s ଠାରୁ %2$s</string>
     <string name="unknown_audio_track_type">ଅଜଣା ଧ୍ୱନି ଟ୍ରାକ୍ ର ପ୍ରକାର</string>
     <string name="original_or_main_audio_track">ମୂଳ କିମ୍ବା ମୁଖ୍ୟ</string>
@@ -462,7 +460,6 @@
     <string name="best_quality">ସର୍ବୋତ୍ତମ</string>
     <string name="change_instance">ଉଦାହରଣ ପରିବର୍ତ୍ତନ କରନ୍ତୁ</string>
     <string name="suggest_change_instance">ସାଧାରଣ ଅପେକ୍ଷା ଲୋଡିଂ ହେଉଛି । ପରିବର୍ତ୍ତନ ପରିସ୍ଥିତିକୁ ବିଚାର କରନ୍ତୁ</string>
-    <string name="contribute_to_dearrow">DeArrow ରେ ଯୋଗଦାନ କରନ୍ତୁ</string>
     <string name="thumbnail_time">ଥମ୍ବନେଲ୍ ସମୟ</string>
     <string name="download_playlist_note">ଡାଉନଲୋଡ୍ କରିବାକୁ ଦୟାକରି ସର୍ବାଧିକ ଅଡିଓ / ଭିଡିଓ ଗୁଣ ଚୟନ କରନ୍ତୁ । ଉପଲବ୍ଧ ହେଲେ କ୍ୟାପସନ୍ କେବଳ ଡାଉନଲୋଡ୍ ହେବ ।</string>
     <string name="title">ଆଖ୍ୟା</string>

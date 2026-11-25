@@ -69,6 +69,7 @@ object BackupHelper {
                 val playlistIds = mutableMapOf<String, String>()
                 Database.withTransaction {
 
+                    Database.audioTimeMarkDao().insertAll(backupFile.timeMarks.orEmpty())
                     Database.watchHistoryDao().insertAll(backupFile.watchHistory.orEmpty())
                     Database.searchHistoryDao().insertAll(backupFile.searchHistory.orEmpty())
                     Database.watchPositionDao().insertAll(backupFile.watchPositions.orEmpty())

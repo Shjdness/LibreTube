@@ -384,8 +384,6 @@
     <string name="descriptive_audio_track">תיאור שמע</string>
     <string name="unknown_or_no_audio">לא ידוע או שאין שמע</string>
     <string name="continue_watching">להמשיך בצפייה</string>
-    <string name="dearrow">הפעלת DeArrow</string>
-    <string name="dearrow_summary">להציג כותרות ותמונות ממוזערות מדויקות יותר ופחות מפוצצות. תוך שיפור זמני הטעינה</string>
     <string name="visibility">חשיפה</string>
     <string name="visibility_public">ציבורית</string>
     <string name="visibility_unlisted">לא מופיעה</string>
@@ -469,7 +467,6 @@
     <string name="local_stream_extraction_summary">למשוך פרטי נגינת סרטון אוטומטית מ־YouTube מבלי להשתמש ב־Piped.</string>
     <string name="rich_caption_rendering_summary">לעבד כתוביות אינטרנטיות לחוויה עשירה ואישית יותר</string>
     <string name="albums">אלבומים</string>
-    <string name="contribute_to_dearrow">תרומה ל־DeArrow</string>
     <string name="title">כותרת</string>
     <string name="import_temp_playlist">לייבא רשימת נגינה זמנית?</string>
     <string name="thumbnail_time">זמן תצוגה ממוזערת</string>

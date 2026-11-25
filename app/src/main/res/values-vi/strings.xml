@@ -381,7 +381,6 @@
     <string name="import_playlists_from">Nhập danh sách phát từ</string>
     <string name="export_playlists_to">Xuất danh sách phát sang</string>
     <string name="group_name_error_exists">Hãy chọn một cái tên độc nhất</string>
-    <string name="dearrow_summary">Hiển thị tiêu đề và hình thu nhỏ chính xác hơn và ít giật gân hơn. Tăng thời gian tải</string>
     <string name="resolution_limited">giới hạn</string>
     <string name="tooltip_close">Đóng</string>
     <string name="auto_generated">Tự động tạo ra</string>
@@ -405,7 +404,6 @@
     <string name="player_channel_description">Hiển thị thông báo khi đang phát</string>
     <string name="tooltip_scroll_to_top">Cuộn lên đầu</string>
     <string name="sponsorblock_user_id">ID người dùng Chặn Nhà tài trợ</string>
-    <string name="dearrow">Kích hoạt DeArrow</string>
     <string name="segment_type">Loại phân đoạn</string>
     <string name="visibility_public">Công cộng</string>
     <string name="tooltip_repeat">Lặp lại</string>
@@ -464,7 +462,6 @@
     <string name="show_updates">Kiểm tra cập nhật tự động</string>
     <string name="albums">Bộ sưu tập</string>
     <string name="thumbnail_time">Thời điểm hình thu nhỏ</string>
-    <string name="contribute_to_dearrow">Đóng góp cho DeArrow</string>
     <string name="title">Tiêu đề</string>
     <string name="import_temp_playlist">Nhập danh sách phát tạm thời?</string>
     <string name="import_temp_playlist_summary">Bạn có muốn tạo danh sách phát mới có tên \'%1$s\' không? Danh sách phát sẽ chứa %2$d đoạn phim.</string>

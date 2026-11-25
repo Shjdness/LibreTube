@@ -30,6 +30,10 @@ class BackupDialog : DialogFragment() {
         @StringRes val name: Int,
         val onSelected: suspend (BackupFile) -> Unit
     ) {
+        data object TimeMarks : BackupOption(R.string.audio_time_marks, onSelected = {
+            it.timeMarks = Database.audioTimeMarkDao().getAll()
+        })
+
         data object WatchHistory : BackupOption(R.string.watch_history, onSelected = {
             it.watchHistory = Database.watchHistoryDao().getAll()
         })
@@ -104,6 +108,7 @@ class BackupDialog : DialogFragment() {
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val backupOptions = listOf(
+            BackupOption.TimeMarks,
             BackupOption.WatchHistory,
             BackupOption.WatchPositions,
             BackupOption.SearchHistory,

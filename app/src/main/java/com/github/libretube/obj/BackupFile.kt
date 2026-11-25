@@ -24,6 +24,7 @@ data class BackupFile(
     //
     // only compatible with LibreTube itself, database objects
     //
+    var timeMarks: List<com.github.libretube.db.obj.AudioTimeMark>? = emptyList(),
     var watchHistory: List<WatchHistoryItem>? = emptyList(),
     var watchPositions: List<WatchPosition>? = emptyList(),
     var searchHistory: List<SearchHistoryItem>? = emptyList(),

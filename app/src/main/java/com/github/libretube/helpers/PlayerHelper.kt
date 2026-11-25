@@ -81,11 +81,7 @@ object PlayerHelper {
             true
         )
 
-    private val bufferingGoal: Int
-        get() = PreferenceHelper.getString(
-            PreferenceKeys.BUFFERING_GOAL,
-            "50"
-        ).toInt() * 1000
+    private const val bufferingGoal = 50_000
 
     var autoPlayEnabled: Boolean
         get() = PreferenceHelper.getBoolean(

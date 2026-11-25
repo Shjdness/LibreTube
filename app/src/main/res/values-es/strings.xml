@@ -384,8 +384,6 @@
     <string name="unknown_audio_track_type">Tipo de pista de audio desconocido</string>
     <string name="original_or_main_audio_track">Original</string>
     <string name="continue_watching">Continuar viendo</string>
-    <string name="dearrow">Habilitar DeArrow</string>
-    <string name="dearrow_summary">Muestra miniaturas y títulos más precisos y menos sensacionalistas. Incrementa los tiempos de carga</string>
     <string name="visibility_public">Público</string>
     <string name="visibility">Visibilidad</string>
     <string name="visibility_unlisted">No listado</string>
@@ -467,7 +465,6 @@
     <string name="albums">Álbumes</string>
     <string name="import_temp_playlist_summary">¿Desea crear una nueva lista llamada \'%1$s\'? La lista contendrá %2$d vídeos.</string>
     <string name="import_temp_playlist">¿Importar lista de reproducción temporal?</string>
-    <string name="contribute_to_dearrow">Contribuir a DeArrow</string>
     <string name="title">Título</string>
     <string name="thumbnail_time">Duracción de la miniatura</string>
     <string name="best_quality">Mejor</string>

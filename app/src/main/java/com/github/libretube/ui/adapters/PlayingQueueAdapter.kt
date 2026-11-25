@@ -8,7 +8,6 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.github.libretube.databinding.QueueRowBinding
 import com.github.libretube.extensions.toID
-import com.github.libretube.helpers.ImageHelper
 import com.github.libretube.helpers.ThemeHelper
 import com.github.libretube.ui.viewholders.PlayingQueueViewHolder
 import com.github.libretube.util.PlayingQueue
@@ -32,7 +31,6 @@ class PlayingQueueAdapter(
     override fun onBindViewHolder(holder: PlayingQueueViewHolder, position: Int) {
         val streamItem = PlayingQueue.getStreams()[position]
         holder.binding.apply {
-            ImageHelper.loadImage(streamItem.thumbnail, thumbnail)
             title.text = streamItem.title
             videoInfo.text = streamItem.uploaderName + "  •  " +
                 DateUtils.formatElapsedTime(streamItem.duration ?: 0)

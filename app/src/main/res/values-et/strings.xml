@@ -368,8 +368,6 @@
     <string name="manual">Käsitsi</string>
     <string name="automatic">Automaatselt</string>
     <string name="automatic_once">Üks kord automaatselt</string>
-    <string name="dearrow">Kasuta DeArrow teenust</string>
-    <string name="dearrow_summary">Näita täpsemaid ja vähem sensatsioonimaigulisi pealkirju ja pisipilte. Sellega pikeneb video laadimise aeg</string>
     <string name="visibility">Nähtavus</string>
     <string name="visibility_public">Avalik</string>
     <string name="visibility_unlisted">Pole loendis</string>
@@ -395,7 +393,6 @@
     <string name="tooltip_repeat">Korda</string>
     <string name="tooltip_edit_groups">Muuda gruppe</string>
     <string name="fullscreen_gestures">Viiped täisekraanivaate avamiseks ja sealt väljumiseks</string>
-    <string name="contribute_to_dearrow">Osale DeArrow sisu täiendamisel</string>
     <string name="title">Pealkiri</string>
     <string name="thumbnail_time">Pisipildi aeg</string>
     <string name="upvote">Üles</string>

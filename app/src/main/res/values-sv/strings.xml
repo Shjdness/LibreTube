@@ -251,7 +251,6 @@
     <string name="emptyPlaylistDescription">Spellistans beskrivning får inte vara tom.</string>
     <string name="group_name_error_exists">Välj ett namn som inte redan används.</string>
     <string name="auto_fullscreen_shorts">Automatisk helskärm för Shorts</string>
-    <string name="dearrow_summary">Visa mer korrekta och mindre sensationella titlar och förhandsbilder. Detta ökar laddningstiden.</string>
     <string name="default_or_unknown_audio_track">förvalt eller okänt</string>
     <string name="export_subscriptions_to">Exportera prenumerationer till</string>
     <string name="player_resize_mode">Storleksläge</string>
@@ -321,7 +320,6 @@
     <string name="sort_by">Sortera efter</string>
     <string name="queue">Kö</string>
     <string name="captions_size">Textningsstorlek</string>
-    <string name="dearrow">Aktivera DeArrow</string>
     <string name="local_subscriptions">Lokala prenumerationer</string>
     <string name="defaultIconLight">Standard – ljus</string>
     <string name="visibility_public">Offentlig</string>
@@ -466,7 +464,6 @@
     <string name="external_download_provider_summary">Ange paketnamnet för appen som ska användas för att ladda ner videor. Lämna fältet tomt för att använda LibreTubes inbyggda nedladdningsfunktion.</string>
     <string name="import_temp_playlist_summary">Vill du skapa en ny spellista med namnet \'%1$s\'? Spellistan kommer att innehålla %2$d videor.</string>
     <string name="best_quality">Högsta</string>
-    <string name="contribute_to_dearrow">Bidra till DeArrow</string>
     <string name="thumbnail_time">Tidpunkt för förhandsbild</string>
     <string name="title">Titel</string>
     <string name="also_clear_watch_positions">Rensa även uppspelningspositionerna</string>

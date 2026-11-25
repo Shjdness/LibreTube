@@ -14,6 +14,11 @@
             style="?materialButtonTonalStyle" android:layout_width="wrap_content"
             android:layout_height="wrap_content" android:text="@string/tooltip_sort" app:icon="@drawable/ic_sort" />
     </LinearLayout>
+    <include android:id="@+id/audio_controls" layout="@layout/audio_library_controls" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/continue_listening"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="@string/audio_continue" android:visibility="gone" />
     <com.github.libretube.ui.views.CustomSwipeToRefresh android:id="@+id/playlist_refresh"
         android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
         <FrameLayout android:layout_width="match_parent" android:layout_height="match_parent">

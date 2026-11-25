@@ -385,8 +385,6 @@
     <string name="audio_track_format">%1$s - %2$s</string>
     <string name="unknown_audio_track_type">Невідомий тип звукової доріжки</string>
     <string name="continue_watching">Продовжити перегляд</string>
-    <string name="dearrow">Увімкнути DeArrow</string>
-    <string name="dearrow_summary">Показувати точніші та менш сенсаційні заголовки та обкладинки. Це збільшує час завантаження</string>
     <string name="visibility">Видимість</string>
     <string name="visibility_public">Загальнодоступно</string>
     <string name="visibility_unlisted">Не показується</string>
@@ -470,7 +468,6 @@
     <string name="import_temp_playlist">Імпортувати тимчасовий список відтворення?</string>
     <string name="import_temp_playlist_summary">Бажаєте створити новий список відтворення під назвою \"%1$s\"? Список відтворення міститиме %2$d відео.</string>
     <string name="title">Заголовок</string>
-    <string name="contribute_to_dearrow">Внести покращення у DeArrow</string>
     <string name="thumbnail_time">Показувати час на мініатюрі</string>
     <string name="best_quality">Найвища</string>
     <string name="external_download_provider">Зовнішній постачальник завантажень</string>

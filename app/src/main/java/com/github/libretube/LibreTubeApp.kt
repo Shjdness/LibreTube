@@ -44,6 +44,7 @@ class LibreTubeApp : Application() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 BackupHelper.cleanupInterruptedRestores(this@LibreTubeApp)
+                com.github.libretube.repo.AudioLibraryRepository.refreshStatuses()
             } catch (e: Exception) {
                 Log.w("Libreplayer", "Could not clean interrupted restore files", e)
             }

@@ -23,6 +23,7 @@ import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.appcompat.app.AlertDialog
+import com.github.libretube.ui.extensions.bindAudioLibraryControls
 import com.github.libretube.R
 import com.github.libretube.api.MediaServiceRepository
 import com.github.libretube.api.PlaylistsHelper
@@ -80,6 +81,8 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
     private val triedDates = mutableSetOf<String>()
     private var dateSourceUnavailable = false
     private var snapshotComplete = false
+    private var groupChannels: Set<String>? = null
+    private var readyAudioIds = emptySet<String>()
     private var selectedAuthor: String? = null
     private var isBookmarked = false
 
@@ -127,6 +130,9 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
         binding.bookmark.setOnClickListener { toggleBookmark() }
         binding.playAll.setOnClickListener { startPlayback(visibleTracks().map { it.item }) }
         binding.shuffle.setOnClickListener { startPlayback(visibleTracks().map { it.item }.shuffled()) }
+        bindAudioLibraryControls(binding.audioControls,
+            onGroup = { groupChannels = it; showPlaylistVideos() },
+            onModeChanged = { showPlaylistVideos() })
         binding.authorFilter.setOnClickListener { chooseAuthor() }
         binding.sortBTN.isVisible = true
         binding.sortBTN.setOnClickListener {
@@ -152,7 +158,16 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
         playlistViewModel.searchQuery.observe(viewLifecycleOwner) { showPlaylistVideos() }
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                Database.downloadDao().observeDownloads()
+                com.github.libretube.repo.AudioLibraryRepository.observeReadyIds().collect { ids ->
+                    readyAudioIds = ids
+                    adapter.setDownloadedAudioIds(ids)
+                    showPlaylistVideos()
+                }
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                com.github.libretube.repo.AudioLibraryRepository.observeDownloads()
                     .map { items ->
                         items.filter { it.finishedAudio != null }.mapTo(mutableSetOf()) { it.download.videoId } to
                             items.mapNotNull { item ->
@@ -162,7 +177,6 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
                     .distinctUntilChanged()
                     .flowOn(Dispatchers.IO)
                     .collect { (downloadIds, dates) ->
-                        adapter.setDownloadedAudioIds(downloadIds)
                         adapter.setPublicationDates(dates)
                     }
             }
@@ -255,7 +269,7 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
     }
 
     private fun refreshPublicPlaylist() {
-        if (!NetworkHelper.isNetworkAvailable(requireContext())) {
+        if (com.github.libretube.repo.AudioLibraryRepository.offlineOnly || !NetworkHelper.isNetworkAvailable(requireContext())) {
             binding.playlistProgress.isGone = true
             if (currentPlaylist == null) {
                 binding.playlistAppBar.isVisible = true
@@ -308,6 +322,7 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
     }
 
     private fun fetchPublicPage() {
+        if (com.github.libretube.repo.AudioLibraryRepository.offlineOnly) return
         val token = nextPage ?: return
         refreshJob = viewLifecycleOwner.lifecycleScope.launch {
             safelyLoad {
@@ -437,6 +452,8 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
         val query = playlistViewModel.searchQuery.value.orEmpty()
         val filtered = playlistFeed.mapIndexed(::indexedItem).filter { (item, _) ->
             (selectedAuthor == null || authorKey(item) == selectedAuthor) &&
+                com.github.libretube.repo.AudioLibraryRepository.matchesGroup(item, groupChannels) &&
+                (!com.github.libretube.repo.AudioLibraryRepository.offlineOnly || item.url?.toID() in readyAudioIds) &&
                 (item.title.orEmpty().contains(query, ignoreCase = true) ||
                     item.playlistAuthorName().orEmpty().contains(query, ignoreCase = true))
         }
@@ -490,7 +507,7 @@ class PlaylistFragment : DynamicLayoutManagerFragment(R.layout.fragment_playlist
                 val dao = Database.playlistBookmarkDao()
                 val saved = dao.publicationDates(ids).associate { it.videoId to it.publicationDate }
                 adapter.setPublicationDates(saved)
-                if (dateSourceUnavailable || !NetworkHelper.isNetworkAvailable(requireContext())) return@safelyLoad
+                if (com.github.libretube.repo.AudioLibraryRepository.offlineOnly || dateSourceUnavailable || !NetworkHelper.isNetworkAvailable(requireContext())) return@safelyLoad
                 for (id in ids) {
                     if (adapter.hasPublicationDate(id) || id in triedDates || !ID_PATTERN.matches(id)) continue
                     val streams = try {

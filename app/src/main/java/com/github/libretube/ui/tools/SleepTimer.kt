@@ -17,6 +17,15 @@ object SleepTimer {
         send(context, delayInMinutes)
     }
 
+    fun afterCurrentTrack(context: Context) {
+        if (!AudioPlaybackService.active) return
+        BackgroundHelper.connect(context) { controller ->
+            val command = controller.sendCustomCommand(AudioPlaybackService.runPlayerActionCommand,
+                bundleOf("sleep_end_track" to true))
+            command.addListener({ controller.release() }, ContextCompat.getMainExecutor(context.applicationContext))
+        }
+    }
+
     fun stop(context: Context) {
         if (AudioPlaybackService.active) send(context, 0)
     }

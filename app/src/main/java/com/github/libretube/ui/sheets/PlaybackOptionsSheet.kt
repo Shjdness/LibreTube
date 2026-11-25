@@ -32,6 +32,22 @@ class PlaybackOptionsSheet(
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         _binding = PlaybackBottomSheetBinding.bind(view)
 
+        binding.advancedOptions.setOnClickListener { binding.pitchControls.isGone = !binding.pitchControls.isGone }
+        fun updateRewind() {
+            binding.autoRewind.text = getString(R.string.audio_auto_rewind_value, PreferenceHelper.getInt("audio_auto_rewind", 0))
+        }
+        updateRewind()
+        binding.autoRewind.setOnClickListener {
+            val values = intArrayOf(0, 3, 5, 10)
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.audio_auto_rewind)
+                .setSingleChoiceItems(values.map { getString(R.string.audio_auto_rewind_value, it) }.toTypedArray(),
+                    values.indexOf(PreferenceHelper.getInt("audio_auto_rewind", 0)).coerceAtLeast(0)) { dialog, which ->
+                    PreferenceHelper.putInt("audio_auto_rewind", values[which])
+                    updateRewind()
+                    dialog.dismiss()
+                }.setNegativeButton(R.string.cancel, null).show()
+        }
         binding.speedShortcuts.layoutManager =
             LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
 
@@ -58,8 +74,8 @@ class PlaybackOptionsSheet(
                 return@setOnEditorActionListener false
             }
 
-            val enteredSemitoneValue = editText.text.toString().toFloat()
-            if (enteredSemitoneValue.absoluteValue > SEMITONES_IN_ONE_OCTAVE) {
+            val enteredSemitoneValue = editText.text.toString().toFloatOrNull()
+            if (enteredSemitoneValue == null || !enteredSemitoneValue.isFinite() || enteredSemitoneValue.absoluteValue > SEMITONES_IN_ONE_OCTAVE) {
                 editText.error = context?.getString(
                     R.string.playback_pitch_semitone_error_input,
                     SEMITONES_IN_ONE_OCTAVE

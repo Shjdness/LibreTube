@@ -8,7 +8,6 @@ import com.github.libretube.api.obj.ChapterSegment
 import com.github.libretube.api.obj.Comment
 import com.github.libretube.api.obj.CommentsPage
 import com.github.libretube.api.obj.ContentItem
-import com.github.libretube.api.obj.DeArrowContent
 import com.github.libretube.api.obj.MetaInfo
 import com.github.libretube.api.obj.PipedStream
 import com.github.libretube.api.obj.Playlist
@@ -312,22 +311,6 @@ class NewPipeMediaServiceRepository : MediaServiceRepository {
         )
     }
 
-    override suspend fun getDeArrowContent(videoId: String): DeArrowContent? =
-        runCatching {
-            RetrofitInstance.externalApi.getDeArrowContent(
-                // use hashed video id for privacy
-                // https://wiki.sponsor.ajay.app/w/API_Docs/DeArrow#GET_/api/branding/:sha256HashPrefix
-                videoId.sha256Sum().substring(0, 4)
-            )
-        }.getOrDefault(emptyMap())[videoId]?.let { value ->
-            value.copy(
-                thumbnails = value.thumbnails.map { thumbnail ->
-                    thumbnail.takeIf { it.original } ?: thumbnail.copy(
-                        thumbnail = "${DEARROW_THUMBNAIL_URL}?videoID=$videoId&time=${thumbnail.timestamp}"
-                    )
-                })
-        }
-
     override suspend fun getSearchResults(searchQuery: String, filter: String): SearchResult {
         val queryHandler = NewPipeExtractorInstance.extractor.searchQHFactory.fromQuery(
             searchQuery,
@@ -448,7 +431,5 @@ class NewPipeMediaServiceRepository : MediaServiceRepository {
     }
 
     companion object {
-        private const val DEARROW_THUMBNAIL_URL =
-            "https://dearrow-thumb.ajay.app/api/v1/getThumbnail"
     }
 }

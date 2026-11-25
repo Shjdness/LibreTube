@@ -376,11 +376,9 @@
     <string name="chapters_videoHighlight">Zvýraznění videa</string>
     <string name="category_highlight_summary">Může to být inzerovaný název, miniatura nebo nejzajímavější část videa. Můžete na ni přejít klepnutím v sekci kapitol</string>
     <string name="continue_watching">Pokračovat ve sledování</string>
-    <string name="dearrow">Povolit DeArrow</string>
     <string name="original_or_main_audio_track">Původní</string>
     <string name="dubbed_audio_track">Dabovaná</string>
     <string name="descriptive_audio_track">Audio popis</string>
-    <string name="dearrow_summary">Zobrazit přesnější a méně senzační názvy a náhledy. Zvyšuje dobu načítání</string>
     <string name="default_or_unknown_audio_track">Výchozí</string>
     <string name="unknown_or_no_audio">neznámý nebo bez zvuku</string>
     <string name="audio_track_format">%1$s - %2$s</string>
@@ -467,7 +465,6 @@
     <string name="albums">Alba</string>
     <string name="import_temp_playlist_summary">Chcete importovat dočasný playlist s názvem „%1$s“? Playlist bude obsahovat %2$d videí.</string>
     <string name="import_temp_playlist">Importovat dočasný playlist?</string>
-    <string name="contribute_to_dearrow">Přispívat do služby DeArrow</string>
     <string name="title">Název</string>
     <string name="thumbnail_time">Čas miniatury</string>
     <string name="best_quality">Nejlepší</string>

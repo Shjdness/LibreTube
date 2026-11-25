@@ -30,7 +30,7 @@ class DownloadTasksDialog : DialogFragment() {
             tasks = withContext(Dispatchers.IO) {
                 val dao = Database.downloadDao()
                 val audio = dao.getPendingAudio().associateBy { it.videoId }
-                val partial = dao.getAll().filter { it.audioItem != null && it.finishedAudio == null }
+                val partial = com.github.libretube.repo.AudioLibraryRepository.incompleteDownloads()
                 val incomplete = partial.associateBy { it.download.videoId }
                 val ids = (audio.keys + incomplete.keys).distinct()
                 dao.getPendingPlaylists().map { Task(it.playlistId, it.name, it.error,

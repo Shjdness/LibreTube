@@ -5,32 +5,24 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
-import androidx.core.net.toUri
 import androidx.core.os.bundleOf
 import androidx.media3.common.C
-import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaMetadata
-import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.FileDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.hls.HlsMediaSource
-import androidx.media3.exoplayer.source.MediaSource
-import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
+import com.github.libretube.player.AudioSourceResolver.ResolvedAudio
 import com.github.libretube.R
-import com.github.libretube.api.MediaServiceRepository
 import com.github.libretube.api.SubscriptionHelper
 import com.github.libretube.api.obj.StreamItem
-import com.github.libretube.api.obj.Streams
 import com.github.libretube.constants.IntentData
 import com.github.libretube.db.DatabaseHelper
 import com.github.libretube.db.DatabaseHolder.Database
@@ -38,23 +30,18 @@ import com.github.libretube.enums.PlayerCommand
 import com.github.libretube.enums.PlayerEvent
 import com.github.libretube.extensions.parcelable
 import com.github.libretube.extensions.parcelableExtra
-import com.github.libretube.extensions.setMetadata
-import com.github.libretube.extensions.toAndroidUri
 import com.github.libretube.extensions.toID
 import com.github.libretube.extensions.toastFromMainThread
 import com.github.libretube.extensions.updateParameters
 import com.github.libretube.helpers.NetworkHelper
 import com.github.libretube.helpers.PlayerHelper
 import com.github.libretube.parcelable.PlayerData
-import com.github.libretube.player.SabrMediaSource
-import com.github.libretube.player.manifest.SabrManifest
 import com.github.libretube.repo.UserDataRepositoryHelper
 import com.github.libretube.ui.activities.MainActivity
 import com.github.libretube.util.DefaultTrackSelectorWithAudioQualitySupport
 import com.github.libretube.util.NowPlayingNotification
 import com.github.libretube.util.PlaybackStateStore
 import com.github.libretube.util.PlayingQueue
-import com.github.libretube.util.YoutubeHlsPlaylistParser
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CancellationException
@@ -80,7 +67,11 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
     private var checkpointJob: Job? = null
     private var sleepTimerJob: Job? = null
     private var sleepOriginalVolume = 1f
+    private var endTrackId: String? = null
     private var currentId: String? = null
+    private var readyAudioIds = emptySet<String>()
+    private var lastPauseWall = 0L
+    private var lastPauseTrackId: String? = null
     private var localOnly = false
     private var queueName: String? = null
     private var playlistId: String? = null
@@ -94,7 +85,7 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
     private var transitionStartedAt = 0L
     private var waitingForSoundSince = 0L
 
-    private data class ResolvedAudio(val track: StreamItem, val source: MediaSource, val local: Boolean)
+    private val sourceResolver by lazy { com.github.libretube.player.AudioSourceResolver(this) }
 
     private class NextPreparation(val id: String, val task: Deferred<ResolvedAudio?>) {
         var queued: ResolvedAudio? = null
@@ -104,6 +95,8 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
     override fun onCreate() {
         super.onCreate()
         active = true
+        endTrackId = getSharedPreferences("libreplayer_sleep_end", MODE_PRIVATE).getString("track", null)
+        stopAfterCurrent = endTrackId != null
         val notification = NowPlayingNotification(this)
         notification.notificationIntent = Intent(this, MainActivity::class.java)
             .putExtra(IntentData.maximizePlayer, true)
@@ -124,6 +117,16 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
         }
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) {
+                    val seconds = com.github.libretube.helpers.PreferenceHelper.getInt("audio_auto_rewind", 0).coerceIn(0, 10)
+                    val rewind = lastPauseWall > 0 && lastPauseTrackId == currentId &&
+                        System.currentTimeMillis() - lastPauseWall >= 60_000
+                    lastPauseWall = 0
+                    if (rewind && seconds > 0) player.seekTo((player.currentPosition - seconds * 1000L).coerceAtLeast(0))
+                } else if (!player.playWhenReady && !switchingSource && currentId != null) {
+                    lastPauseWall = System.currentTimeMillis()
+                    lastPauseTrackId = currentId
+                }
                 checkpointJob?.cancel()
                 if (isPlaying) {
                     if (waitingForSoundSince != 0L) {
@@ -144,7 +147,10 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
                 newPosition: Player.PositionInfo,
                 reason: Int
             ) {
-                if (reason == Player.DISCONTINUITY_REASON_SEEK) checkpoint()
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                    if (!player.playWhenReady) lastPauseWall = 0
+                    checkpoint()
+                }
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -180,6 +186,12 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
                         recordReady()
                     }
                     Player.STATE_ENDED -> {
+                        if (stopAfterCurrent) {
+                            setEndTrack(null)
+                            player.pause()
+                            checkpoint()
+                            return
+                        }
                         if (switchingSource || explicitlyStopped || !player.playWhenReady) return
                         checkpoint()
                         if (PlayingQueue.repeatMode == Player.REPEAT_MODE_ONE) {
@@ -214,9 +226,22 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
                 checkpoint()
             }
         })
+        scope.launch {
+            com.github.libretube.repo.AudioLibraryRepository.observeReadyIds().collect { readyAudioIds = it }
+        }
+        scope.launch {
+            PlayingQueue.contentRevision.collect { checkpoint() }
+        }
         session = MediaLibrarySession.Builder(this, QueuePlayer(player), this)
             .setId("libreplayer-audio")
             .build()
+        scope.launch {
+            val saved = withContext(Dispatchers.IO) { PlaybackStateStore.load(this@AudioPlaybackService) }
+            if (lastPauseWall == 0L && !player.isPlaying) {
+                lastPauseWall = saved?.pausedAt ?: 0L
+                lastPauseTrackId = saved?.trackId
+            }
+        }
         val sleepPreferences = getSharedPreferences("libreplayer_sleep", MODE_PRIVATE)
         val remaining = sleepPreferences.getLong("deadline", 0) - System.currentTimeMillis()
         if (remaining > 0) startSleepTimer(remaining, sleepPreferences.getFloat("volume", player.volume))
@@ -251,12 +276,12 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
                 }
                 explicitlyStopped = false
                 checkpoint()
-                localOnly = request.isOffline
+                localOnly = request.isOffline || com.github.libretube.repo.AudioLibraryRepository.offlineOnly
                 queueName = request.queueName
                 playlistId = request.playlistId
                 playlistNextPage = request.playlistNextPage
                 if (!request.keepQueue) PlayingQueue.clear()
-                request.playlistNextPage?.let { page ->
+                request.playlistNextPage?.takeUnless { localOnly }?.let { page ->
                     request.playlistId?.let { PlayingQueue.appendPlaylistPages(it, page) }
                 }
                 launchSource(listOf(id), autoPlay = !request.resumePaused && PlayerHelper.playAutomatically,
@@ -265,10 +290,28 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
             }
             stopServiceCommand -> stopPlayback()
             runPlayerActionCommand -> when {
+                args.containsKey("offline_mode_changed") -> {
+                    clearNextPreparation()
+                    if (com.github.libretube.repo.AudioLibraryRepository.offlineOnly) PlayingQueue.cancelNetworkLoads()
+                    if (com.github.libretube.repo.AudioLibraryRepository.offlineOnly &&
+                        player.mediaMetadata.extras?.getBoolean(IntentData.localAudio) != true) {
+                        checkpoint()
+                        sourceGeneration++
+                        sourceJob?.cancel()
+                        switchingSource = false
+                        player.pause()
+                        player.stop()
+                    }
+                }
+                args.containsKey("sleep_end_track") -> {
+                    cancelSleepTimer()
+                    setEndTrack(currentId.takeIf { args.getBoolean("sleep_end_track") })
+                    clearNextPreparation()
+                }
                 args.containsKey(SLEEP_TIMER_MINUTES) -> {
                     val minutes = args.getLong(SLEEP_TIMER_MINUTES)
                     if (minutes !in 0..1440) return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_BAD_VALUE))
-                    if (minutes == 0L) cancelSleepTimer() else startSleepTimer(minutes * 60_000)
+                    if (minutes == 0L) { cancelSleepTimer(); setEndTrack(null) } else startSleepTimer(minutes * 60_000)
                 }
                 args.containsKey(PlayerCommand.SKIP_SILENCE.name) ->
                     player.skipSilenceEnabled = args.getBoolean(PlayerCommand.SKIP_SILENCE.name)
@@ -290,12 +333,16 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
     }
 
     private fun automaticCandidates(): List<String> {
-        if (!PlayerHelper.autoPlayEnabled || PlayingQueue.repeatMode == Player.REPEAT_MODE_ONE) return emptyList()
-        return PlayingQueue.adjacentIds(currentId).filterNot(failedAutomaticTracks::contains)
+        if (stopAfterCurrent || !PlayerHelper.autoPlayEnabled || PlayingQueue.repeatMode == Player.REPEAT_MODE_ONE) return emptyList()
+        return eligibleAdjacent().filterNot(failedAutomaticTracks::contains)
+    }
+
+    private fun eligibleAdjacent(reverse: Boolean = false) = PlayingQueue.adjacentIds(currentId, reverse).let { ids ->
+        if (localOnly || com.github.libretube.repo.AudioLibraryRepository.offlineOnly) ids.filter { it in readyAudioIds } else ids
     }
 
     private fun playAdjacent(reverse: Boolean = false, automatic: Boolean = false) {
-        val candidates = if (automatic) automaticCandidates() else PlayingQueue.adjacentIds(currentId, reverse).take(1)
+        val candidates = if (automatic) automaticCandidates() else eligibleAdjacent(reverse).take(1)
         if (candidates.isEmpty()) {
             if (automatic && PlayingQueue.repeatMode == Player.REPEAT_MODE_ALL && PlayingQueue.size() == 1) {
                 player.seekTo(0)
@@ -305,6 +352,7 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
         }
         val next = nextPreparation
         if (!automatic && !switchingSource && next?.id == candidates.first() && next.queued != null &&
+            (!com.github.libretube.repo.AudioLibraryRepository.offlineOnly || next.queued?.local == true) &&
             player.mediaItemCount > player.currentMediaItemIndex + 1
         ) {
             player.seekTo(player.currentMediaItemIndex + 1, C.TIME_UNSET)
@@ -354,32 +402,8 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
         }
     }
 
-    private suspend fun resolveAudio(id: String, allowNetwork: Boolean = true): ResolvedAudio? {
-        val start = SystemClock.elapsedRealtime()
-        return try {
-            val completed = withContext(Dispatchers.IO) {
-                val download = Database.downloadDao().findById(id) ?: return@withContext null
-                download.finishedAudio?.let { download to it }
-            }
-            if (completed != null) {
-                val (local, audio) = completed
-                val item = MediaItem.Builder().setMediaId(id).setUri(audio.path.toAndroidUri()).setMetadata(local).build()
-                val source = ProgressiveMediaSource.Factory(FileDataSource.Factory()).createMediaSource(item)
-                return ResolvedAudio(local.download.toStreamItem(), source, local = true)
-            }
-            if (!allowNetwork || localOnly || !NetworkHelper.isNetworkAvailable(this)) return null
-            val streams = MediaServiceRepository.instance.getStreams(id, includeDislikes = false)
-            val source = onlineSource(id, streams) ?: return null
-            ResolvedAudio(streams.toStreamItem(id), source, local = false)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not resolve audio for $id", e)
-            null
-        } finally {
-            Log.d(TAG, "Resolved or rejected $id in ${SystemClock.elapsedRealtime() - start}ms")
-        }
-    }
+    private suspend fun resolveAudio(id: String, allowNetwork: Boolean = true) =
+        sourceResolver.resolve(id, allowNetwork && !localOnly && !com.github.libretube.repo.AudioLibraryRepository.offlineOnly)
 
     private fun launchSource(
         candidates: List<String>,
@@ -412,7 +436,7 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
                         resolveAudio(id, allowNetwork = false) ?: continue
                     } else {
                         setPlaylistMetadata(title)
-                        if (next?.id == id && next.queued == null) next.task.await() else resolveAudio(id)
+                        if (next?.id == id) next.queued ?: next.task.await() else resolveAudio(id)
                     }
                     if (audio == null) {
                         if (automatic) failedAutomaticTracks.add(id)
@@ -424,7 +448,7 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
                             ?.takeUnless { DatabaseHelper.isVideoWatched(it, audio.track.duration) } ?: 0L
                     } else 0L
                     if (request != null && !request.keepQueue && !audio.local) {
-                        PlayingQueue.updateQueue(audio.track, request.playlistId, request.channelId)
+                        PlayingQueue.updateQueue(audio.track.toStreamItem(), request.playlistId, request.channelId)
                     }
                     automaticTransition = automatic
                     onTrackSelected(id, audio)
@@ -439,7 +463,7 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
                     R.string.audio_not_downloaded else R.string.audio_network_failed
                 setPlaylistMetadata(errorMessage = getString(message))
                 toastFromMainThread(message)
-                if (!automatic && shouldResumeOnFailure && player.playbackState != Player.STATE_ENDED) player.play()
+                if (!localOnly && !com.github.libretube.repo.AudioLibraryRepository.offlineOnly && !automatic && shouldResumeOnFailure && player.playbackState != Player.STATE_ENDED) player.play()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -458,12 +482,16 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
     }
 
     private fun onTrackSelected(id: String, audio: ResolvedAudio) {
+        if (currentId != id) {
+            if (endTrackId != id) setEndTrack(null)
+            if (lastPauseTrackId != id) lastPauseWall = 0
+        }
         currentId = id
-        PlayingQueue.updateCurrent(audio.track)
+        PlayingQueue.updateCurrent(audio.track.toStreamItem())
         player.setWakeMode(if (audio.local) C.WAKE_MODE_LOCAL else C.WAKE_MODE_NETWORK)
         setPlaylistMetadata()
         if (!audio.local) scope.launch(Dispatchers.IO) {
-            runCatching { SubscriptionHelper.submitFeedItemChange(audio.track.toFeedItem()) }
+            runCatching { SubscriptionHelper.submitFeedItemChange(audio.track.toStreamItem().toFeedItem()) }
         }
     }
 
@@ -494,12 +522,19 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
     private fun checkpoint() {
         val id = currentId ?: return
         if (explicitlyStopped || switchingSource) return
-        PlaybackStateStore.save(this, PlaybackStateStore.State(id, player.currentPosition.coerceAtLeast(0),
-            localOnly, queueName, PlayingQueue.getStreams(), playlistId, playlistNextPage))
+        PlaybackStateStore.save(this, id, player.currentPosition.coerceAtLeast(0), localOnly, queueName,
+            playlistId, playlistNextPage, if (player.isPlaying) 0 else lastPauseWall, PlayingQueue.contentRevision.value) { PlayingQueue.getStreams() }
         if (PlayerHelper.watchPositionsAudio) PlayerHelper.saveWatchPosition(player, id)
     }
 
+    private fun setEndTrack(id: String?) {
+        endTrackId = id
+        stopAfterCurrent = id != null
+        getSharedPreferences("libreplayer_sleep_end", MODE_PRIVATE).edit().putString("track", id).apply()
+    }
+
     private fun startSleepTimer(durationMillis: Long, volume: Float? = null) {
+        setEndTrack(null)
         cancelSleepTimer()
         sleepOriginalVolume = volume ?: player.volume
         sleepDeadlineElapsed = SystemClock.elapsedRealtime() + durationMillis
@@ -539,6 +574,7 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
     }
 
     private fun stopPlayback() {
+        setEndTrack(null)
         cancelSleepTimer()
         explicitlyStopped = true
         waitingForSoundSince = 0
@@ -583,12 +619,29 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
         player.release()
         PlayingQueue.clear()
         active = false
+        stopAfterCurrent = false
         super.onDestroy()
     }
 
     private inner class QueuePlayer(player: Player) : ForwardingPlayer(player) {
-        override fun hasNextMediaItem() = PlayingQueue.adjacentIds(currentId).isNotEmpty()
-        override fun hasPreviousMediaItem() = PlayingQueue.adjacentIds(currentId, reverse = true).isNotEmpty()
+        override fun play() {
+            if (com.github.libretube.repo.AudioLibraryRepository.offlineOnly &&
+                player.mediaMetadata.extras?.getBoolean(IntentData.localAudio) != true) {
+                currentId?.let { launchSource(listOf(it), explicitPosition = player.currentPosition) }
+            } else super.play()
+        }
+        override fun setPlayWhenReady(playWhenReady: Boolean) {
+            if (playWhenReady && com.github.libretube.repo.AudioLibraryRepository.offlineOnly &&
+                player.mediaMetadata.extras?.getBoolean(IntentData.localAudio) != true) {
+                currentId?.let { launchSource(listOf(it), explicitPosition = player.currentPosition) }
+            } else super.setPlayWhenReady(playWhenReady)
+        }
+        override fun prepare() {
+            if (!com.github.libretube.repo.AudioLibraryRepository.offlineOnly ||
+                player.mediaMetadata.extras?.getBoolean(IntentData.localAudio) == true) super.prepare()
+        }
+        override fun hasNextMediaItem() = eligibleAdjacent().isNotEmpty()
+        override fun hasPreviousMediaItem() = eligibleAdjacent(reverse = true).isNotEmpty()
         override fun seekToNext() = playAdjacent()
         override fun seekToPrevious() = playAdjacent(reverse = true)
         override fun seekToNextMediaItem() = playAdjacent()
@@ -599,44 +652,9 @@ class AudioPlaybackService : MediaLibraryService(), MediaLibrarySession.Callback
         override fun isCommandAvailable(command: Int): Boolean = getAvailableCommands().contains(command)
     }
 
-    private fun onlineSource(videoId: String, streams: Streams): MediaSource? {
-        val httpTracks = streams.audioStreams.filter { it.url?.startsWith("http") == true }
-        val dashTracks = httpTracks.filter {
-            it.initStart != null && it.initEnd != null && it.indexStart != null && (it.indexEnd ?: 0) > 0 &&
-                it.codec != null && it.mimeType != null && it.bitrate != null
-        }
-
-        return when {
-            !streams.isLive && streams.audioStreams.isNotEmpty() &&
-                streams.serverAbrStreamingUrl != null && streams.videoPlaybackUstreamerConfig != null -> {
-                val factory = SabrMediaSource.Factory(SabrManifest(videoId, streams))
-                val item = createMediaItem(videoId, streams.serverAbrStreamingUrl.toUri(), "application/vnd.yt-ump", streams)
-                factory.createMediaSource(item)
-            }
-            !streams.isLive && dashTracks.isNotEmpty() -> {
-                val manifest = PlayerHelper.createDashSource(streams.copy(audioStreams = dashTracks))
-                androidx.media3.exoplayer.dash.DashMediaSource.Factory(DefaultDataSource.Factory(this))
-                    .createMediaSource(createMediaItem(videoId, manifest, MimeTypes.APPLICATION_MPD, streams))
-            }
-            !streams.isLive && httpTracks.isNotEmpty() -> {
-                val audio = httpTracks.maxBy { it.bitrate ?: 0 }
-                val factory = ProgressiveMediaSource.Factory(DefaultDataSource.Factory(this))
-                factory.createMediaSource(createMediaItem(videoId, audio.url!!.toUri(), audio.mimeType, streams))
-            }
-            streams.hls != null -> {
-                val factory = HlsMediaSource.Factory(DefaultDataSource.Factory(this))
-                    .setPlaylistParserFactory(YoutubeHlsPlaylistParser.Factory())
-                val item = createMediaItem(videoId, streams.hls.toUri(), MimeTypes.APPLICATION_M3U8, streams)
-                factory.createMediaSource(item)
-            }
-            else -> null
-        }
-    }
-
-    private fun createMediaItem(videoId: String, uri: android.net.Uri, mimeType: String?, streams: Streams): MediaItem =
-        MediaItem.Builder().setMediaId(videoId).setUri(uri).setMimeType(mimeType).setMetadata(streams, videoId).build()
-
     companion object {
+        @Volatile var stopAfterCurrent = false
+            private set
         const val SLEEP_TIMER_MINUTES = "sleep_timer_minutes"
         @Volatile var sleepDeadlineElapsed = 0L
             private set

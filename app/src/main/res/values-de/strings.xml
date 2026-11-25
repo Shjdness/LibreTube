@@ -383,8 +383,6 @@
     <string name="default_or_unknown_audio_track">Standard</string>
     <string name="unknown_or_no_audio">Unbekannt oder kein Ton</string>
     <string name="continue_watching">Weiterschauen</string>
-    <string name="dearrow_summary">Präzisere und weniger sensationslüsterne Titel und Miniaturansichten (Thumbnails) anzeigen. Erhöht die Ladezeiten.</string>
-    <string name="dearrow">DeArrow verwenden</string>
     <string name="visibility">Sichtbarkeit</string>
     <string name="visibility_public">Öffentlich</string>
     <string name="visibility_unlisted">Nicht gelistet</string>
@@ -465,7 +463,6 @@
     <string name="comments_count">Kommentare (%1$s)</string>
     <string name="albums">Alben</string>
     <string name="best_quality">Beste</string>
-    <string name="contribute_to_dearrow">Zu DeArrow beitragen</string>
     <string name="thumbnail_time">Zeitpunkt des Vorschaubilds</string>
     <string name="import_temp_playlist_summary">Neue Playlist mit dem Namen „%1$s“ erstellen? Die Playlist wird %2$d Videos enthalten.</string>
     <string name="title">Titel</string>

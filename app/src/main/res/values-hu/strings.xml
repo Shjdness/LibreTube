@@ -383,8 +383,6 @@
     <string name="dubbed_audio_track">Szinkronizált</string>
     <string name="unknown_or_no_audio">ismeretlen vagy nincs hang</string>
     <string name="continue_watching">Nézés folytatása</string>
-    <string name="dearrow">DeArrow engedélyezése</string>
-    <string name="dearrow_summary">Pontosabb és kevésbé szenzációhajhász címek és bélyegképek megjelenítése. Növeli a betöltési időt</string>
     <string name="visibility_unlisted">Listázatlan</string>
     <string name="duration_span">Időtartam: %1$s</string>
     <string name="uploader_name">Feltöltő neve</string>
@@ -468,7 +466,6 @@
     <string name="import_temp_playlist_summary">Szeretne új lejátszási listát létrehozni „%1$s” néven? A lejátszási lista %2$d videót fog tartalmazni.</string>
     <string name="title">Cím</string>
     <string name="thumbnail_time">Bélyegkép ideje</string>
-    <string name="contribute_to_dearrow">Közreműködés a DeArrow-hoz</string>
     <string name="best_quality">Legjobb</string>
     <string name="external_download_provider">Külső letöltési szolgáltató</string>
     <string name="external_download_provider_summary">Adja meg a videók letöltéséhez használni kívánt alkalmazás csomagnevét. A LibreTube beépített letöltőjének használatához hagyja üresen.</string>

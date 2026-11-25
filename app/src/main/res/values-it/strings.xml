@@ -384,8 +384,6 @@
     <string name="dubbed_audio_track">Doppiato</string>
     <string name="original_or_main_audio_track">Originale</string>
     <string name="continue_watching">Continua a guardare</string>
-    <string name="dearrow">Attiva DeArrow</string>
-    <string name="dearrow_summary">Mostra titoli e miniature più accurati e meno sensazionalistici. Aumenta i tempi di caricamento</string>
     <string name="visibility">Visibilità</string>
     <string name="visibility_public">Pubblico</string>
     <string name="visibility_unlisted">Non elencato</string>
@@ -468,7 +466,6 @@
     <string name="import_temp_playlist">Importare playlist temporanea?</string>
     <string name="import_temp_playlist_summary">Vuoi creare una nuova playlist di nome \'%1$s\'? La playlist conterrà %2$d video.</string>
     <string name="title">Titolo</string>
-    <string name="contribute_to_dearrow">Contribuisci a DeArrow</string>
     <string name="thumbnail_time">Minuto anteprima</string>
     <string name="best_quality">Migliore</string>
     <string name="external_download_provider">Fornitore di download esterno</string>

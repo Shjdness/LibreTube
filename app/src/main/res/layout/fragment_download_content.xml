@@ -19,6 +19,8 @@
             android:layout_height="wrap_content"
             android:text="@string/download_tasks" />
 
+        <include android:id="@+id/audio_controls" layout="@layout/audio_library_controls" />
+
         <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -64,6 +66,10 @@
             android:visibility="gone"
             app:icon="@drawable/ic_download_folder" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/check_library" style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/audio_check_library" />
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/downloads_recView"
             android:layout_width="match_parent"

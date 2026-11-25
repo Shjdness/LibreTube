@@ -144,7 +144,6 @@
     <string name="off">ปิด</string>
     <string name="automatic">อัตโนมัติ</string>
     <string name="automatic_once">อัตโนมัติครั้งเดียว</string>
-    <string name="dearrow">เปิด DeArrow</string>
     <string name="change_playlist_description">เปลี่ยนรายละเอียดเพลย์ลิสต์</string>
     <string name="playlist_description">รายละเอียดเพลย์ลิสต์</string>
     <string name="emptyPlaylistDescription">รายละเอียดเพลย์ลิสต์ไม่สามารถเว้นว่างได้</string>
@@ -157,8 +156,6 @@
     <string name="playlistUrl">เพลย์ลิสต์ URL</string>
     <string name="playing_next">เล่นวิดีโอถัดไปใน %1$s</string>
     <string name="play_automatically">เล่นอัตโนมัติ</string>
-    <string name="contribute_to_dearrow">ช่วยเหลือให้ DeArrow</string>
-    <string name="dearrow_summary">แสดงชื่อและภาพของวิดีโอให้ตรงกับเนื้อหาของวิดีโอมากยิ่งขึ้นและลดความน่าตื่นเต้นที่ไม่จำเป็นลง ระยะเวลาการโหลดจะเพิ่มขึ้น</string>
     <string name="live">ไลฟ์สด</string>
     <string name="github">GitHub</string>
     <string name="yt_shorts">Shorts</string>

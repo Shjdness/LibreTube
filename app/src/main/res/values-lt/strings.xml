@@ -402,9 +402,6 @@
     <string name="manual">Rankinis</string>
     <string name="automatic">Automatinis</string>
     <string name="automatic_once">Automatinis (vieną kartą)</string>
-    <string name="dearrow">DeArrow</string>
-    <string name="dearrow_summary">Sumažina „Clickbait“: pakeičia klaidinančias antraštes ir miniatiūras geresnėmis</string>
-    <string name="contribute_to_dearrow">Prisidėti prie „DeArrow“</string>
     <string name="title">Pavadinimas</string>
     <string name="thumbnail_time">Miniatiūros laikas</string>
     <string name="visibility">Matomumas</string>

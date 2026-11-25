@@ -376,8 +376,6 @@
     <string name="category_highlight_summary">ਜਾਂ ਤਾਂ ਵਿਗਿਆਪਨ ਕੀਤਾ ਸਿਰਲੇਖ, ਥੰਮਨੇਲ ਜਾਂ ਵੀਡੀਓ ਦਾ ਸਭ ਤੋਂ ਦਿਲਚਸਪ ਭਾਗ ਹੋ ਸਕਦਾ ਹੈ। ਤੁਸੀਂ ਚੈਪਟਰ ਭਾਗ ਵਿੱਚ ਇਸ \'ਤੇ ਟੈਪ ਕਰਕੇ ਇਸ \'ਤੇ ਜਾ ਸਕਦੇ ਹੋ</string>
     <string name="original_or_main_audio_track">ਮੂਲ</string>
     <string name="continue_watching">ਵੇਖਣਾ ਜਾਰੀ ਰੱਖੋ</string>
-    <string name="dearrow">DeArrow ਇਨੇਬਲ ਕਰੋ</string>
-    <string name="dearrow_summary">ਵਧੇਰੇ ਸਟੀਕ ਅਤੇ ਘੱਟ ਸਨਸਨੀਖੇਜ਼ ਸਿਰਲੇਖ ਅਤੇ ਥੰਮਨੇਲ ਦਿਖਾਓ। ਲੋਡ ਹੋਣ ਦਾ ਸਮਾਂ ਵਧਾਉਂਦਾ ਹੈ</string>
     <string name="unknown_audio_track_type">ਅਗਿਆਤ ਆਡੀਓ ਟਰੈਕ ਕਿਸਮ</string>
     <string name="dubbed_audio_track">ਡੱਬ ਕੀਤਾ</string>
     <string name="unknown_audio_language">ਅਗਿਆਤ ਆਡੀਓ ਭਾਸ਼ਾ</string>
@@ -464,7 +462,6 @@
     <string name="gestures">ਇਸ਼ਾਰੇ</string>
     <string name="show_updates">ਆਟੋਮੈਟਿਕਲੀ ਅੱਪਡੇਟ ਦੀ ਜਾਂਚ ਕਰੋ</string>
     <string name="albums">ਐਲਬਮਾਂ</string>
-    <string name="contribute_to_dearrow">DeArrow ਵਿੱਚ ਯੋਗਦਾਨ ਪਾਓ</string>
     <string name="title">ਸਿਰਲੇਖ</string>
     <string name="thumbnail_time">ਥੰਬਨੇਲ ਸਮਾਂ</string>
     <string name="import_temp_playlist">ਅਸਥਾਈ ਪਲੇਲਿਸਟ ਨੂੰ ਆਯਾਤ ਕਰੋ?</string>

@@ -20,6 +20,7 @@ import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.github.libretube.ui.extensions.bindAudioLibraryControls
 import com.github.libretube.R
 import com.github.libretube.constants.PreferenceKeys
 import com.github.libretube.databinding.FragmentDownloadContentBinding
@@ -120,6 +121,7 @@ class DownloadsFragment : DynamicLayoutManagerFragment(R.layout.fragment_downloa
     private lateinit var folderAdapter: DownloadFolderAdapter
     private lateinit var folderBack: OnBackPressedCallback
     private var items = emptyList<DownloadWithItems>()
+    private var groupChannels: Set<String>? = null
     private var channel: String? = null
     private var sortIndex = 0
     private var service: DownloadService? = null
@@ -188,6 +190,11 @@ class DownloadsFragment : DynamicLayoutManagerFragment(R.layout.fragment_downloa
                 render()
             }.show(childFragmentManager)
         }
+        bindAudioLibraryControls(binding.audioControls,
+            onGroup = { groupChannels = it; render() })
+        binding.checkLibrary.setOnClickListener {
+            com.github.libretube.ui.dialogs.AudioLibraryCheckDialog().show(childFragmentManager, "check-audio-library")
+        }
         binding.resumeAll.setOnClickListener {
             DownloadHelper.requestForegroundDownload(requireContext(),
                 Intent(requireContext(), DownloadService::class.java).setAction(DownloadService.ACTION_RESUME_ALL))
@@ -212,7 +219,7 @@ class DownloadsFragment : DynamicLayoutManagerFragment(R.layout.fragment_downloa
         downloadsModel.searchQuery.observe(viewLifecycleOwner) { render() }
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                Database.downloadDao().observeDownloads().collect { downloads ->
+                com.github.libretube.repo.AudioLibraryRepository.observeDownloads().collect { downloads ->
                     items = downloads.filter { it.audioItem != null }
                     if (items.none { it.channelKey == channel }) channel = null
                     render()
@@ -234,14 +241,15 @@ class DownloadsFragment : DynamicLayoutManagerFragment(R.layout.fragment_downloa
         val order = DownloadSortingOrder.entries[sortIndex]
         binding.sortType.text = order.title.getText(requireContext())
 
-        val displayed = items.filter { item ->
+        val grouped = items.filter { com.github.libretube.repo.AudioLibraryRepository.matchesGroup(it.download.toStreamItem(), groupChannels) }
+        val displayed = grouped.filter { item ->
             (channel == null || item.channelKey == channel) &&
                 (item.download.title.contains(query, true) || item.download.uploader.contains(query, true))
         }
         val nextAdapter = if (showFolders) folderAdapter else audioAdapter
         if (binding.downloadsRecView.adapter !== nextAdapter) binding.downloadsRecView.adapter = nextAdapter
         if (showFolders) {
-            folderAdapter.submitList(items.groupBy { it.channelKey }.map { (key, tracks) ->
+            folderAdapter.submitList(grouped.groupBy { it.channelKey }.map { (key, tracks) ->
                 DownloadFolder(key, channelName(tracks.first()), tracks.size)
             }.sortedBy { it.name.lowercase() })
         } else {
@@ -253,9 +261,9 @@ class DownloadsFragment : DynamicLayoutManagerFragment(R.layout.fragment_downloa
         binding.resumeAll.isVisible = pendingAudioCount > 0 || items.any { it.audioItem?.isFinished == false }
     }
 
-    private fun shelfItems() = sortDownloads(items.filter { channel == null || it.channelKey == channel }, DownloadSortingOrder.entries[sortIndex])
+    private fun shelfItems() = sortDownloads(items.filter { (channel == null || it.channelKey == channel) && com.github.libretube.repo.AudioLibraryRepository.matchesGroup(it.download.toStreamItem(), groupChannels) }, DownloadSortingOrder.entries[sortIndex])
 
-    private fun fullChannelQueue(key: String) = sortDownloads(items.filter { it.channelKey == key }, DownloadSortingOrder.entries[sortIndex])
+    private fun fullChannelQueue(key: String) = sortDownloads(items.filter { it.channelKey == key && com.github.libretube.repo.AudioLibraryRepository.matchesGroup(it.download.toStreamItem(), groupChannels) }, DownloadSortingOrder.entries[sortIndex])
 
     private fun channelName(item: DownloadWithItems) =
         item.download.uploader.ifBlank { getString(R.string.unknown) }

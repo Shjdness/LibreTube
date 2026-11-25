@@ -123,6 +123,7 @@ object OfflineBackupHelper {
                     fileName = entry.fileName.substringAfterLast('/').substringAfterLast('\\'),
                     path = source.toPath(), downloadSize = entry.size,
                     format = entry.format, quality = entry.quality))
+                dao.updateAudioStatus(com.github.libretube.db.obj.AudioDownloadStatus(id, true))
                 dao.removePendingAudio(id)
             } else {
                 dao.insertPendingAudio(listOf(PendingAudioDownload(id, track.title.orEmpty())))

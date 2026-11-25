@@ -158,6 +158,7 @@ class DownloadService : LifecycleService() {
                     ACTION_DOWNLOAD_PAUSE -> pauseDownload(downloadId)
                     ACTION_DOWNLOAD_STOP -> stopDownload(downloadId)
                     ACTION_RESUME_ALL -> resumeAll()
+                    ACTION_REPAIR_AUDIO -> repairAudio(intent.getStringArrayListExtra(EXTRA_AUDIO_IDS).orEmpty())
                     ACTION_ENQUEUE_AUDIO_BATCH -> submitAudio(intent.getStringArrayListExtra(EXTRA_AUDIO_IDS).orEmpty())
                     else -> intent?.parcelableExtra<DownloadData>(IntentData.downloadData)?.let {
                         submitAudio(listOf(it.videoId))
@@ -208,6 +209,7 @@ class DownloadService : LifecycleService() {
             val previous = Database.downloadDao().findById(videoId)?.downloadItems.orEmpty()
                 .filter { it.type == FileType.AUDIO }
             if (previous.any { it.isFinished }) {
+                Database.downloadDao().updateAudioStatus(com.github.libretube.db.obj.AudioDownloadStatus(videoId, true))
                 Database.downloadDao().removePendingAudio(videoId)
                 return
             }
@@ -373,6 +375,7 @@ class DownloadService : LifecycleService() {
                         item.downloadSize = actualSize
                         if (item.downloadSize <= 0L) error("Empty audio download")
                         Database.downloadDao().updateDownloadItem(item)
+                        Database.downloadDao().updateAudioStatus(com.github.libretube.db.obj.AudioDownloadStatus(item.videoId, true))
                         setPauseNotification(notificationBuilder, item, true)
                         _downloadFlow.emit(item.id to DownloadStatus.Completed)
                         return
@@ -474,6 +477,7 @@ class DownloadService : LifecycleService() {
         item.path = getDownloadPath(DownloadHelper.AUDIO_DIR, item.fileName)
             .apply { deleteIfExists() }.createFile()
         item.id = Database.downloadDao().insertDownloadItem(item).toInt()
+        Database.downloadDao().updateAudioStatus(com.github.libretube.db.obj.AudioDownloadStatus(item.videoId, false))
         queueDownload(item.id)
     }
 
@@ -496,6 +500,23 @@ class DownloadService : LifecycleService() {
         _downloadFlow.emit(id to DownloadStatus.Paused)
     }
 
+    private suspend fun repairAudio(ids: List<String>) {
+        for (id in ids.filter(VIDEO_ID::matches).distinct()) {
+            val record = Database.downloadDao().findById(id)
+            record?.downloadItems?.forEach { pauseDownload(it.id) }
+            while (record?.downloadItems?.any { it.id in runningIds } == true) delay(100)
+            if (record != null) {
+                Database.downloadDao().insertPendingAudio(listOf(PendingAudioDownload(id, record.download.title)))
+                Database.downloadDao().updateAudioStatus(com.github.libretube.db.obj.AudioDownloadStatus(id, false))
+                for (item in record.downloadItems.filter { it.type == FileType.AUDIO }) {
+                    java.nio.file.Files.deleteIfExists(item.path)
+                    Database.downloadDao().deleteDownloadItemById(item.id)
+                }
+            }
+            submitAudio(listOf(id))
+        }
+    }
+
     private suspend fun resumeAll() {
         val dao = Database.downloadDao()
         val incomplete = dao.getAll().flatMap { it.downloadItems }
@@ -514,6 +535,7 @@ class DownloadService : LifecycleService() {
         activeIds.remove(id)
         val item = Database.downloadDao().findDownloadItemById(id) ?: return
         notificationManager.cancel(item.getNotificationId())
+        Database.downloadDao().updateAudioStatus(com.github.libretube.db.obj.AudioDownloadStatus(item.videoId, false))
         Database.downloadDao().deleteDownloadItemById(id)
         item.path.deleteIfExists()
         _downloadFlow.emit(id to DownloadStatus.Stopped)
@@ -690,6 +712,7 @@ class DownloadService : LifecycleService() {
         const val ACTION_RESUME_ALL =
             "com.github.libretube.services.DownloadService.ACTION_RESUME_ALL"
 
+        const val ACTION_REPAIR_AUDIO = "com.github.libretube.services.DownloadService.REPAIR_AUDIO"
         const val ACTION_ENQUEUE_AUDIO_BATCH = "com.github.libretube.services.DownloadService.ENQUEUE_AUDIO_BATCH"
         const val EXTRA_AUDIO_IDS = "audioIds"
 

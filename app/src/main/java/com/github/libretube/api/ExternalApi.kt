@@ -1,7 +1,5 @@
 package com.github.libretube.api
 
-import com.github.libretube.api.obj.DeArrowBody
-import com.github.libretube.api.obj.DeArrowContent
 import com.github.libretube.api.obj.VoteInfo
 import kotlinx.serialization.json.JsonElement
 import retrofit2.http.Body
@@ -12,7 +10,6 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Url
 
-private const val DEARROW_API_URL = "https://sponsor.ajay.app"
 private const val RYD_API_URL = "https://ryd-proxy.kavin.rocks"
 private const val GOOGLE_API_KEY = "AIzaSyDyT5W0Jh49F30Pqqtyfdf7pDLFKLJoAnw"
 const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.3"
@@ -20,12 +17,6 @@ const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/53
 interface ExternalApi {
     @GET("$RYD_API_URL/votes")
     suspend fun getVotes(@Query("videoId") videoId: String): VoteInfo
-
-    @POST("$DEARROW_API_URL/api/branding")
-    suspend fun submitDeArrow(@Body body: DeArrowBody)
-
-    @GET("$DEARROW_API_URL/api/branding/{videoId}")
-    suspend fun getDeArrowContent(@Path("videoId") videoId: String): Map<String, DeArrowContent>
 
     @Headers(
         "User-Agent: $USER_AGENT",

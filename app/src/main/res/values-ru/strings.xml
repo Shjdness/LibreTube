@@ -385,8 +385,6 @@
     <string name="original_or_main_audio_track">Оригинал</string>
     <string name="unknown_or_no_audio">неизвестно или нет звука</string>
     <string name="continue_watching">Продолжить просмотр</string>
-    <string name="dearrow">Включить DeArrow</string>
-    <string name="dearrow_summary">Показывать более точные и менее сенсационные заголовки и миниатюры. Увеличивает время загрузки</string>
     <string name="visibility">Видимость</string>
     <string name="visibility_public">Общественная</string>
     <string name="visibility_unlisted">Не показывается</string>
@@ -468,7 +466,6 @@
     <string name="albums">Альбомы</string>
     <string name="import_temp_playlist">Импортировать временный плейлист?</string>
     <string name="import_temp_playlist_summary">Хотите создать новый плейлист «%1$s»? В этом плейлисте будет %2$d видео.</string>
-    <string name="contribute_to_dearrow">Внести улучшение в DeArrow</string>
     <string name="title">Название</string>
     <string name="thumbnail_time">Показывать время на миниатюре</string>
     <string name="best_quality">Наилучшее</string>
