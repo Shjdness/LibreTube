@@ -42,9 +42,35 @@ class AudioExportViewModel(application: Application, private val saved: SavedSta
             try {
                 val source = AudioFileExport.source(saved["trackId"] ?: "")
                 changes.value = State.Ready(source)
-                if (sharing) start(source, null)
-            } catch (e: CancellationException) { changes.value = State.Error(R.string.audio_export_cancelled); throw e }
-            catch (e: Exception) { changes.value = State.Error((e as? AudioFileExport.Failure)?.reason ?: R.string.audio_export_unavailable) }
+                val selected = saved.get<String>("chosenUri")
+                if (selected != null) start(source, Uri.parse(selected))
+                else if (sharing) start(source, null)
+            } catch (e: CancellationException) {
+                val cleaned = abandonChosen()
+                changes.value = State.Error(R.string.audio_export_cancelled, !cleaned)
+                throw e
+            } catch (e: Exception) {
+                val cleaned = abandonChosen()
+                changes.value = State.Error((e as? AudioFileExport.Failure)?.reason ?: R.string.audio_export_unavailable, !cleaned)
+            }
+        }
+    }
+
+    private suspend fun abandonChosen(): Boolean {
+        val value = saved.remove<String>("chosenUri") ?: return true
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+            runCatching { AudioFileExport.discardEmpty(context, Uri.parse(value)) }.getOrDefault(false)
+        }
+    }
+
+    fun selectDestination(uri: Uri) {
+        val current = changes.value
+        if (current is State.Running || current is State.Done) return
+        saved["chosenUri"] = uri.toString()
+        if (current is State.Ready) start(current.source, uri)
+        else if (current is State.Error) task = viewModelScope.launch {
+            val cleaned = abandonChosen()
+            changes.value = current.copy(residue = !cleaned)
         }
     }
 
@@ -52,6 +78,7 @@ class AudioExportViewModel(application: Application, private val saved: SavedSta
         if (changes.value !is State.Ready) return
         changes.value = State.Running(0)
         saved["running"] = true
+        saved.remove<String>("chosenUri")
         task = viewModelScope.launch {
             try {
                 val progress: (Long) -> Unit = { count ->

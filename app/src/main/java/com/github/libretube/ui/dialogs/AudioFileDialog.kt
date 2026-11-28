@@ -32,10 +32,9 @@ class AudioFileDialog : DialogFragment() {
         val uri = result.data?.data ?: return@registerForActivityResult
         if (result.resultCode != android.app.Activity.RESULT_OK) return@registerForActivityResult
         if (uri.scheme != "content" || uri.authority.isNullOrBlank()) { model.rejectTarget(); return@registerForActivityResult }
-        val state = model.state.value as? AudioExportViewModel.State.Ready ?: return@registerForActivityResult
         val flags = result.data!!.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         runCatching { requireContext().contentResolver.takePersistableUriPermission(uri, flags) }
-        model.start(state.source, uri)
+        model.selectDestination(uri)
     }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {

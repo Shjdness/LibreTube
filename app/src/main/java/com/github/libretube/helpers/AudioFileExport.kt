@@ -137,6 +137,19 @@ object AudioFileExport {
         return runCatching { context.contentResolver.openInputStream(uri)?.use { it.read() == -1 } == true }.getOrDefault(false)
     }
 
+    suspend fun discardEmpty(context: Context, uri: Uri): Boolean = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            if (!emptyDestination(context, uri)) {
+                release(context, uri)
+                return@withLock true // No bytes were written by this operation; preserve any existing contents.
+            }
+            record(context, uri, true)
+            val cleaned = delete(context, uri)
+            if (cleaned) { record(context, uri, false); release(context, uri) }
+            cleaned
+        }
+    }
+
     suspend fun save(context: Context, source: Source, uri: Uri, progress: (Long) -> Unit): Result = withContext(Dispatchers.IO) {
         mutex.withLock {
             var complete = false
