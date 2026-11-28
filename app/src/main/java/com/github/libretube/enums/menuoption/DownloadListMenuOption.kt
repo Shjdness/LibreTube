@@ -18,7 +18,8 @@ sealed class DownloadListMenuOption(
 
     data object PlayNext : DownloadListMenuOption(R.string.play_next, R.drawable.ic_playlist)
     data object AddToQueue : DownloadListMenuOption(R.string.add_to_queue, R.drawable.ic_queue)
-    data object Share : DownloadListMenuOption(R.string.share, R.drawable.ic_share)
+    data object Share : DownloadListMenuOption(R.string.audio_share_link, R.drawable.ic_share)
     data object Delete : DownloadListMenuOption(R.string.delete, R.drawable.ic_delete)
-    data object Export : DownloadListMenuOption(R.string.export, R.drawable.ic_export)
+    data object ShareFile : DownloadListMenuOption(R.string.audio_share_file, R.drawable.ic_share)
+    data object Export : DownloadListMenuOption(R.string.audio_save_file, R.drawable.ic_export)
 }

@@ -636,4 +636,29 @@
     <string name="audio_auto_rewind">Rewind after a pause of at least one minute</string>
     <string name="audio_auto_rewind_value">Auto rewind: %1$d seconds (0 = off)</string>
     <string name="audio_continue">Continue listening</string>
+    <string name="audio_save_file">Save audio file</string>
+    <string name="audio_share_file">Share audio file</string>
+    <string name="audio_share_link">Share link</string>
+    <string name="audio_export_unavailable">This local audio is missing, incomplete or marked damaged. Check or download it again.</string>
+    <string name="audio_export_format_error">Cannot identify a readable audio-only file. Check or download this audio again.</string>
+    <string name="audio_export_changed">The source file changed during copying. Nothing was marked successful.</string>
+    <string name="audio_export_verify_error">The saved file could not be verified. Export did not complete.</string>
+    <string name="audio_export_write_error">Could not write the audio file. Check free space, destination access or the storage connection.</string>
+    <string name="audio_export_interrupted">A previous audio export was interrupted. Incomplete output will be removed where access is available. Please export again.</string>
+    <string name="audio_export_choose">Choose save location</string>
+    <string name="audio_export_close">Close</string>
+    <string name="audio_export_preparing">Checking downloaded audio…</string>
+    <string name="audio_export_details">%1$s\n%2$s · Original audio, without conversion</string>
+    <string name="audio_export_progress_text">Copying audio: %1$d%%</string>
+    <string name="audio_export_checking">Checking the saved audio…</string>
+    <string name="audio_export_cancelled">Export cancelled. The original download is unchanged.</string>
+    <string name="audio_export_residue">The incomplete destination could not be deleted. Remove it from the selected location.</string>
+    <string name="audio_export_verified">Audio saved and content verified.</string>
+    <string name="audio_export_copied">Audio copied with the expected byte count. This destination does not allow content read-back verification.</string>
+    <string name="audio_export_open">Open audio file</string>
+    <string name="audio_export_no_app">No app is available to open this audio format.</string>
+    <string name="audio_export_permission">The destination no longer grants access. Export to another location.</string>
+    <string name="audio_export_existing">The destination is not an empty new file, or its size cannot be checked. Choose a new filename.</string>
+    <string name="audio_share_ready">Audio copy ready for sharing. Only this temporary copy is shared.</string>
+    <string name="audio_export_no_space">Not enough free space at the destination. Choose another location or free up space.</string>
 </resources>

@@ -43,6 +43,10 @@ class LibreTubeApp : Application() {
         WorkManager.getInstance(this).cancelUniqueWork("NotificationService")
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
+                val interrupted = com.github.libretube.helpers.AudioFileExport.cleanup(this@LibreTubeApp)
+                if (interrupted > 0) kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(this@LibreTubeApp, R.string.audio_export_interrupted, android.widget.Toast.LENGTH_LONG).show()
+                }
                 BackupHelper.cleanupInterruptedRestores(this@LibreTubeApp)
                 com.github.libretube.repo.AudioLibraryRepository.refreshStatuses()
             } catch (e: Exception) {

@@ -384,7 +384,7 @@
             android:exported="false" />
 
         <provider
-            android:name="androidx.core.content.FileProvider"
+            android:name="com.github.libretube.helpers.AudioShareFileProvider"
             android:exported="false"
             android:authorities="${applicationId}.fileprovider"
             android:grantUriPermissions="true">

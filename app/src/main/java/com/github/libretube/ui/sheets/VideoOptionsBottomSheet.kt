@@ -40,6 +40,8 @@ class VideoOptionsBottomSheet : BaseBottomSheet() {
         playlistId: String?
     ) {
         when (option) {
+            VideoBottomSheetItem.ExportFile -> com.github.libretube.ui.dialogs.AudioFileDialog.show(parentFragmentManager, videoId)
+            VideoBottomSheetItem.ShareFile -> com.github.libretube.ui.dialogs.AudioFileDialog.show(parentFragmentManager, videoId, share = true)
             // Start the background mode
             VideoBottomSheetItem.PlayOnBackground -> {
                 NavigationHelper.navigateVideo(
@@ -161,6 +163,16 @@ class VideoOptionsBottomSheet : BaseBottomSheet() {
             }
         }
 
+        lifecycleScope.launch {
+            val ready = try { com.github.libretube.repo.AudioLibraryRepository.localAudio(videoId) != null }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) { false }
+            if (ready) {
+                optionsList = optionsList.filterNot { it == VideoBottomSheetItem.Download } +
+                    listOf(VideoBottomSheetItem.ExportFile, VideoBottomSheetItem.ShareFile)
+                setItems(optionsList) { which -> onOptionSelect(optionsList[which], videoId, playlistId) }
+            }
+        }
         super.onCreate(savedInstanceState)
     }
 

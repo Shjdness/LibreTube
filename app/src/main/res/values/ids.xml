@@ -1,0 +1,4 @@
+<resources>
+    <item name="audio_export_message" type="id" />
+    <item name="audio_export_progress" type="id" />
+</resources>

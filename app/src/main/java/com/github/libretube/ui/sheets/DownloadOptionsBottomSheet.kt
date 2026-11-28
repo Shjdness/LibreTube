@@ -1,7 +1,6 @@
 package com.github.libretube.ui.sheets
 
 import android.os.Bundle
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.os.bundleOf
 import androidx.fragment.app.setFragmentResult
 import androidx.media3.common.util.UnstableApi
@@ -16,27 +15,13 @@ import com.github.libretube.extensions.parcelable
 import com.github.libretube.extensions.toID
 import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.obj.ShareData
-import com.github.libretube.ui.dialogs.DownloadExportDialog
+import com.github.libretube.ui.dialogs.AudioFileDialog
 import com.github.libretube.ui.dialogs.ShareDialog
 import com.github.libretube.util.PlayingQueue
 
 @UnstableApi
 class DownloadOptionsBottomSheet : BaseBottomSheet() {
     private lateinit var videoId: String
-
-    private val exportFilePicker =
-        registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { outputUri ->
-            if (outputUri == null) return@registerForActivityResult
-
-            DownloadExportDialog().apply {
-                arguments = Bundle().apply {
-                    putString(IntentData.videoId, videoId)
-                    putString(IntentData.outputUri, outputUri.toString())
-                }
-            }.show(requireActivity().supportFragmentManager, null)
-
-            dismiss()
-        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val streamItem = arguments?.parcelable<StreamItem>(IntentData.streamItem)!!
@@ -46,6 +31,7 @@ class DownloadOptionsBottomSheet : BaseBottomSheet() {
             DownloadListMenuOption.Share,
             DownloadListMenuOption.Delete,
             DownloadListMenuOption.Export,
+            DownloadListMenuOption.ShareFile,
         )
 
         val isSelectedVideoCurrentlyPlaying = PlayingQueue.getCurrent()?.url?.toID() == videoId
@@ -87,15 +73,8 @@ class DownloadOptionsBottomSheet : BaseBottomSheet() {
                     PlayingQueue.add(streamItem)
                 }
 
-                DownloadListMenuOption.Export -> {
-                    lifecycleScope.launch {
-                        val audio = Database.downloadDao().findById(videoId)?.finishedAudio ?: return@launch
-                        exportFilePicker.launch(streamItem.title.orEmpty() + "." + audio.fileName.substringAfterLast('.'))
-                    }
-                    // dismissing now would cause the exportFilePicker to be dropped before
-                    // the file is actually chosen by the user
-                    autoDismiss = false
-                }
+                DownloadListMenuOption.Export -> AudioFileDialog.show(parentFragmentManager, videoId)
+                DownloadListMenuOption.ShareFile -> AudioFileDialog.show(parentFragmentManager, videoId, share = true)
             }
         }
 

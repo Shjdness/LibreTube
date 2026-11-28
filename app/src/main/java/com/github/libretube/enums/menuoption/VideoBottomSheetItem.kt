@@ -48,8 +48,11 @@ sealed class VideoBottomSheetItem(
         drawableRes = R.drawable.ic_download,
     )
 
+    data object ExportFile : VideoBottomSheetItem(R.string.audio_save_file, R.drawable.ic_export)
+    data object ShareFile : VideoBottomSheetItem(R.string.audio_share_file, R.drawable.ic_share)
+
     data object Share : VideoBottomSheetItem(
-        titleStringRes = R.string.share,
+        titleStringRes = R.string.audio_share_link,
         drawableRes = R.drawable.ic_share,
     )
 }
